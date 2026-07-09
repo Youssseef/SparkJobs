@@ -1,0 +1,23 @@
+name: SparkJobs Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 0 */50 * *' # Run once every 50 days
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create Empty Commit
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keep-alive scheduled scan workflow $(date)"
+          git push

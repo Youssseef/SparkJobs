@@ -1,0 +1,27 @@
+# Dependencies
+web/node_modules/
+node_modules/
+
+# Next.js build outputs
+web/.next/
+web/out/
+
+# Python virtual env and cache
+bot/venv/
+bot/.venv/
+bot/env/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+web/.env.local
+bot/.env
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,22 @@
+Youssef Wael
+Cairo, Egypt
+youssef@sparkgen.net | +20 100 000 0000 | https://github.com/youssef
+
+PROFESSIONAL SUMMARY
+Passionate Frontend Developer with 3+ years of experience building modern user interfaces using React, JavaScript, and TypeScript. Expert in responsive web design, state management, and modern styling libraries like TailwindCSS.
+
+TECHNICAL SKILLS
+- Frontend: React, JavaScript, TypeScript, HTML5, CSS3, Redux, Context API
+- Styling: TailwindCSS, CSS Modules, Styled Components
+- Tools: Git, GitHub, VS Code, Figma
+- Methodologies: Agile, Scrum, Responsive Web Design
+
+EXPERIENCE
+Frontend Developer | SparkGen | 2024 - Present
+- Built and maintained responsive React interfaces for the SparkGen Admin Dashboard.
+- Integrated RESTful APIs and optimized state synchronization using custom hooks.
+- Refactored legacy modular codebases, maintaining strict anti-god-component architectures.
+
+Junior React Developer | Freelance | 2023 - 2024
+- Developed responsive landing pages and simple web applications for local clients.
+- Collaborated with UI/UX designers on Figma to translate wireframes into interactive code.

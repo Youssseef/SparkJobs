@@ -1,0 +1,49 @@
+name: SparkJobs Scanner
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Crucial permission to commit seen_jobs.json back to repo
+      
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Use stable python in Github Actions environment
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          # Install jobspy first, ignoring numpy requirement to avoid compile errors
+          pip install python-jobspy --no-deps
+          # Install beautifulsoup4, markdownify, pydantic, regex, tls-client
+          pip install beautifulsoup4 markdownify pydantic regex tls-client
+          # Install rest of requirements
+          pip install -r requirements.txt
+
+      - name: Run Job Scanner
+        run: python src/main.py
+        env:
+          # Use secrets defined in Github Repo Settings
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+
+      - name: Commit and Push seen_jobs Database updates
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/seen_jobs.json
+          # Commit only if there are modified changes to avoid empty commit loops
+          git diff --quiet && git diff --staged --quiet || (git commit -m "update: seen_jobs database $(date +'%Y-%m-%d %H:%M')" && git push)

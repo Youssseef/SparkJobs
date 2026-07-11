@@ -1,9 +1,17 @@
 # SparkJobs 🚀
 > **من صناع عائلة SparkGen | Brought to you by the creators of SparkGen**
 
+## 🕌 صدقة جارية / Ongoing Charity
+> **"هذا العمل صدقة جارية لي ولكل أمة المسلمين، نسأل الله أن يرزقنا وإياكم الرزق الحلال الطيب."**
+> 
+> *This project is dedicated as an ongoing charity (Sadaqah Jariyah) for the benefit of the Muslim Ummah. May Allah grant us and you lawful, blessed, and pure livelihood.*
+
+---
+
 **SparkJobs** هو بوت توظيف ذكي ومجاني بالكامل يعمل على مدار الساعة (24/7) لمراقبة وظائفك المفضلة على أشهر المنصات العالمية، ومطابقتها مع سيرتك الذاتية (CV) باستخدام الذكاء الاصطناعي، وإرسال تنبيه فوري ومخصص لك على تليجرام.
 
 ---
+
 
 ## 🌍 المميزات الرئيسية / Key Features
 

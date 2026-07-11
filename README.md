@@ -1,13 +1,29 @@
 # SparkJobs 🚀
 > Smart Automated Job Scan, Match Rating & Telegram Alerts Bot
 
+## 🕌 صدقة جارية / Ongoing Charity
+> **"هذا العمل صدقة جارية لي ولكل أمة المسلمين، نسأل الله أن يرزقنا وإياكم الرزق الحلال الطيب."**
+> 
+> *This project is dedicated as an ongoing charity (Sadaqah Jariyah) for the benefit of the Muslim Ummah. May Allah grant us and you lawful, blessed, and pure livelihood.*
+
+---
+
 SparkJobs is an automated personal assistant designed to query local and international developer job boards (Indeed, Google Jobs) concurrently, score job descriptions against your CV using **Google Gemini AI**, filter out duplicate or fake postings, and deliver clean, structured summaries directly to your Telegram channel.
 
 It consists of two main parts:
-1. **`web/`**: A Next.js (React + Tailwind CSS) client portal that runs locally. It features a bilingual setup wizard to easily initialize the bot, generate a repository on your behalf, write configurations, and manage active searches.
+1. **`web/`**: A React + Tailwind CSS client portal integrated into the SparkGen website. It features a bilingual setup wizard to easily initialize the bot, generate a repository on your behalf, write configurations, and manage active searches.
 2. **`bot/`**: A Python-based scraping and AI classification bot designed to be hosted 100% free on **GitHub Actions** as a cron schedule with no server hosting costs.
 
 ---
+
+## 🛠️ Recent Architectural Upgrades (Updates log)
+
+*   **State Persistence & Ephemeral Storage Fix:** The GitHub Actions workflow (`scan.yml`) now commits and pushes both `seen_jobs.json` (deduplication database) and `status_tracker.json` (dashboard stats) back to the user's private repository after every scan. This ensures that dashboard metrics correctly accumulate over time instead of resetting on ephemeral runner shutdowns.
+*   **Security Isolation & Dev Environment Protection:** Local testing files (like `bot/test_live_alert.py`) are configured to load keys securely from environment variables (`os.environ.get`) instead of hardcoded strings, and are permanently ignored via `.gitignore` to prevent accidental credential leaks.
+*   **New Google GenAI SDK Migration:** Migrated the bot from the legacy `google-generativeai` package to the new `google.genai` SDK for future-proof API compatibility.
+*   **Gemini Model Cascade Fallback:** Configured a resilient AI matching pipeline starting with `gemini-2.5-flash` as primary, and automatically cascading to `gemini-2.5-flash-lite` and `gemini-3.1-flash-lite` in case of rate limits or model downtime.
+*   **Binary CV Parsing (.pdf & .docx):** Replaced manual plain text variables with support for binary file uploads. Features a pure-Python custom DOCX parser utilizing python's built-in `zipfile` and `xml.etree.ElementTree` namespaces to extract clean text without bloating the action runner's dependencies.
+
 
 ## 🌟 Premium Features & Capabilities
 

@@ -40,10 +40,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
 
-      - name: Commit and Push seen_jobs Database updates
+      - name: Commit and Push bot state back to repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/seen_jobs.json
+          # Commit BOTH seen_jobs.json (deduplication db) AND status_tracker.json (dashboard stats)
+          git add data/seen_jobs.json data/status_tracker.json
           # Commit only if there are modified changes to avoid empty commit loops
-          git diff --quiet && git diff --staged --quiet || (git commit -m "update: seen_jobs database $(date +'%Y-%m-%d %H:%M')" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "update: bot state $(date +'%Y-%m-%d %H:%M')" && git push)

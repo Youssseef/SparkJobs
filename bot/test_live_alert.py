@@ -7,10 +7,25 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 from ai_matcher import analyze_job_match
 from telegram_sender import send_telegram_alert
 
-# Credentials
-GEMINI_KEY = "AIzaSyAgiLAWI4Qxo5ZxS-v0OpMwl-okHMf9Z-k"
-BOT_TOKEN = "8981297505:AAEAC68GDiaYRtVb0wmN9yxJa9ZmX7mt33c"
-CHAT_ID = "1180069421"
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️  NEVER hardcode real credentials here.
+#     Set these as environment variables when running locally:
+#
+#     $env:GEMINI_KEY   = "AIza..."
+#     $env:BOT_TOKEN    = "1234:ABC..."
+#     $env:CHAT_ID      = "1180..."
+#
+#     Each user's real keys live ONLY in their own private GitHub repo Secrets
+#     (Settings → Secrets and variables → Actions) — never in source code.
+# ─────────────────────────────────────────────────────────────────────────────
+GEMINI_KEY = os.environ.get("GEMINI_KEY", "")
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
+CHAT_ID    = os.environ.get("CHAT_ID", "")
+
+if not GEMINI_KEY or not BOT_TOKEN or not CHAT_ID:
+    print("ERROR: Missing credentials. Set GEMINI_KEY, BOT_TOKEN, and CHAT_ID as environment variables.")
+    sys.exit(1)
+
 
 # Test Data
 cv_text = """

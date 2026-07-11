@@ -25,3 +25,13 @@ bot/.env
 # OS files
 .DS_Store
 Thumbs.db
+
+# ─── SECURITY: Never commit test files with credentials ───────────────────────
+# The test_live_alert.py file is a local-only dev tool.
+# It must NEVER contain real credentials and must never be tracked.
+bot/test_live_alert.py
+
+# Local credential override files
+*.env
+*.credentials
+.secrets

@@ -50,13 +50,14 @@ export default function Home() {
     chatId: string;
     githubToken: string;
   } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const t = PAGE_TRANSLATIONS[language];
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans select-none relative overflow-hidden py-16" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       
-      {/* Background Glows matching SparkGen Brand Theme */}
+      {/* Background Glows matching SparkGen Theme */}
       <div className="absolute inset-0 max-h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1400px] h-[650px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08)_0%,rgba(230,135,56,0.03)_40%,transparent_70%)] pointer-events-none z-0" />
         <div className="absolute top-[400px] left-[5%] w-[500px] h-[500px] bg-blue-600/[0.01] rounded-full blur-[140px] pointer-events-none" />
@@ -70,7 +71,7 @@ export default function Home() {
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Outfit:wght@400;500;700&display=swap" rel="stylesheet" />
       </Head>
 
-      {/* Floating Language Switcher for Local Testing (Will be removed after merge since main site handles language) */}
+      {/* Floating Language Switcher */}
       <div className="absolute top-6 right-6 z-50">
         <button
           onClick={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
@@ -84,13 +85,13 @@ export default function Home() {
       {/* Hero Section / Main Content Area */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-6 flex flex-col justify-center relative z-10">
         
-        {!setupData ? (
+        {!setupData || isEditing ? (
           <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
             {/* Left Column: Premium Pitch */}
             <div className="lg:col-span-6 space-y-6 text-start">
               
-              {/* Breadcrumbs indicating open from SparkFamily */}
+              {/* Breadcrumbs */}
               <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 mb-2" dir={language === 'ar' ? 'rtl' : 'ltr'}>
                 <a href="https://sparkgen.app" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
                   {t.breadcrumbParent}
@@ -108,13 +109,12 @@ export default function Home() {
                 {t.heroDesc}
               </p>
 
-              {/* Divider and Key Capabilities header */}
+              {/* Divider and Key Capabilities */}
               <div className="pt-6 border-t border-white/[0.04] max-w-lg">
                 <div className="text-[11px] font-extrabold tracking-widest text-slate-500 uppercase mb-4">
                   {t.keyCapabilities}
                 </div>
                 
-                {/* Grid of Features below the description */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-4">
                   
                   <div className="flex items-start gap-4">
@@ -166,8 +166,12 @@ export default function Home() {
             <div className="lg:col-span-6 w-full">
               <SetupWizard
                 language={language}
+                initialGithubToken={setupData?.githubToken}
+                initialRepoName={setupData?.repoName}
+                initialChatId={setupData?.chatId}
                 onSuccess={(repoName, chatId, githubToken) => {
                   setSetupData({ repoName, chatId, githubToken });
+                  setIsEditing(false);
                 }}
               />
             </div>
@@ -178,6 +182,8 @@ export default function Home() {
             repoName={setupData.repoName}
             chatId={setupData.chatId}
             githubToken={setupData.githubToken}
+            language={language}
+            onReSetup={() => setIsEditing(true)}
           />
         )}
       </main>

@@ -1,4 +1,6 @@
 import re
+import zipfile
+import xml.etree.ElementTree as ET
 from pypdf import PdfReader
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -16,6 +18,26 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     except Exception as e:
         print(f"Error reading PDF {pdf_path}: {e}")
         return ""
+
+def extract_text_from_docx(docx_path: str) -> str:
+    """
+    Extracts all raw text from a DOCX file using built-in libraries.
+    No external dependencies required!
+    """
+    try:
+        texts = []
+        with zipfile.ZipFile(docx_path) as docx:
+            xml_content = docx.read('word/document.xml')
+            root = ET.fromstring(xml_content)
+            # Find all <w:t> elements in main namespace
+            for el in root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                if el.text:
+                    texts.append(el.text)
+        return " ".join(texts).strip()
+    except Exception as e:
+        print(f"Error reading DOCX {docx_path}: {e}")
+        return ""
+
 
 def anonymize_cv_text(text: str) -> str:
     """

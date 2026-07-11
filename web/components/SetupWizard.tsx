@@ -1,126 +1,17 @@
 import React, { useState } from 'react';
-import { Sparkles, HelpCircle, ArrowRight, RotateCw, ChevronDown, Check, X, Search, Plus } from 'lucide-react';
+import { RotateCw, Check } from 'lucide-react';
+import Step1Profile, { TargetCountryConfig } from './Step1Profile';
+import CvUploadPanel from './CvUploadPanel';
+import Step3Credentials from './Step3Credentials';
+import Step4Deploy from './Step4Deploy';
 
 interface SetupWizardProps {
   language: 'ar' | 'en';
   onSuccess: (repoName: string, chatId: string, token: string) => void;
+  initialGithubToken?: string;
+  initialRepoName?: string;
+  initialChatId?: string;
 }
-
-const COMMON_JOB_TITLES = [
-  'React Developer',
-  'Frontend Engineer',
-  'Backend Engineer',
-  'Fullstack Developer',
-  'UI/UX Designer',
-  'Product Manager',
-  'Mobile App Developer',
-  'iOS Developer',
-  'Android Developer',
-  'Flutter Developer',
-  'React Native Developer',
-  'Game Developer',
-  'Embedded Systems Engineer',
-  'DevOps Engineer',
-  'Cloud Architect',
-  'Cybersecurity Engineer',
-  'QA Engineer',
-  'Test Automation Engineer',
-  'Data Scientist',
-  'Machine Learning Engineer',
-  'Data Analyst',
-  'Data Engineer',
-  'AI Research Scientist',
-  'UI/UX Designer',
-  'Product Designer',
-  'Graphic Designer',
-  'Motion Designer',
-  '3D Artist',
-  'Product Manager',
-  'Project Manager',
-  'Scrum Master',
-  'Business Analyst',
-  'Digital Marketing Specialist',
-  'Content Writer / Copywriter',
-  'SEO Specialist',
-  'Social Media Manager',
-  'Growth Hacker',
-  'Business Development Representative (BDR)',
-  'Sales Manager',
-  'Customer Success Manager',
-  'Technical Support Specialist',
-  'HR Manager / Recruiter',
-  'Operations Manager',
-  'Financial Analyst',
-];
-
-const COUNTRIES_LIST = {
-  ar: [
-    { id: 'Worldwide', name: 'عالمي / ريموت (Worldwide)' },
-    { id: 'Egypt', name: 'مصر (Egypt)' },
-    { id: 'Saudi Arabia', name: 'السعودية (KSA)' },
-    { id: 'United Arab Emirates', name: 'الإمارات (UAE)' },
-    { id: 'Qatar', name: 'قطر (Qatar)' },
-    { id: 'Kuwait', name: 'الكويت (Kuwait)' },
-    { id: 'Oman', name: 'عُمان (Oman)' },
-    { id: 'Bahrain', name: 'البحرين (Bahrain)' },
-    { id: 'Jordan', name: 'الأردن (Jordan)' },
-    { id: 'Germany', name: 'ألمانيا (Germany)' },
-    { id: 'United Kingdom', name: 'المملكة المتحدة (UK)' },
-    { id: 'United States', name: 'الولايات المتحدة (USA)' },
-    { id: 'Canada', name: 'كندا (Canada)' },
-    { id: 'Netherlands', name: 'هولندا (Netherlands)' },
-    { id: 'France', name: 'فرنسا (France)' },
-    { id: 'Sweden', name: 'السويد (Sweden)' },
-    { id: 'Switzerland', name: 'سويسرا (Switzerland)' },
-    { id: 'Australia', name: 'أستراليا (Australia)' },
-  ],
-  en: [
-    { id: 'Worldwide', name: 'Worldwide / Remote' },
-    { id: 'Egypt', name: 'Egypt' },
-    { id: 'Saudi Arabia', name: 'Saudi Arabia (KSA)' },
-    { id: 'United Arab Emirates', name: 'United Arab Emirates (UAE)' },
-    { id: 'Qatar', name: 'Qatar' },
-    { id: 'Kuwait', name: 'Kuwait' },
-    { id: 'Oman', name: 'Oman' },
-    { id: 'Bahrain', name: 'Bahrain' },
-    { id: 'Jordan', name: 'Jordan' },
-    { id: 'Germany', name: 'Germany' },
-    { id: 'United Kingdom', name: 'United Kingdom (UK)' },
-    { id: 'United States', name: 'United States (USA)' },
-    { id: 'Canada', name: 'Canada' },
-    { id: 'Netherlands', name: 'Netherlands' },
-    { id: 'France', name: 'France' },
-    { id: 'Sweden', name: 'Sweden' },
-    { id: 'Switzerland', name: 'Switzerland' },
-    { id: 'Australia', name: 'Australia' },
-  ]
-};
-
-const JOB_TYPES = {
-  ar: [
-    { id: 'remote', name: 'عن بعد' },
-    { id: 'hybrid', name: 'هجين' },
-    { id: 'onsite', name: 'من موقع العمل' },
-  ],
-  en: [
-    { id: 'remote', name: 'Remote' },
-    { id: 'hybrid', name: 'Hybrid' },
-    { id: 'onsite', name: 'On-site' },
-  ]
-};
-
-const VISA_TYPES = {
-  ar: [
-    { id: 'sponsor_required', name: 'مطلوب رعاية تأشيرة' },
-    { id: 'no_sponsor', name: 'لا يتطلب رعاية تأشيرة' },
-    { id: 'relocation_needed', name: 'مساعدة انتقال مطلوبة' },
-  ],
-  en: [
-    { id: 'sponsor_required', name: 'Sponsorship Required' },
-    { id: 'no_sponsor', name: 'No Sponsorship Needed' },
-    { id: 'relocation_needed', name: 'Relocation Assistance' },
-  ]
-};
 
 const TRANSLATIONS = {
   ar: {
@@ -133,18 +24,25 @@ const TRANSLATIONS = {
     visaSponsorshipLabel: 'حالة رعاية التأشيرة',
     nextBtn: 'المتابعة للخطوة التالية',
     backBtn: 'الرجوع',
-    deployBtn: 'بدء التفعيل والتشغيل 🚀',
+    deployBtn: 'بدء التفعيل والتشغيل',
     helpLink: 'من أين أحصل عليه؟',
     helpLinkPat: 'كيف أحصل عليه؟',
     jobSearchPlaceholder: 'ابحث أو اكتب مسمى وظيفي مخصص...',
     countrySearchPlaceholder: 'ابحث عن دولة للبحث بها...',
     customJobBtn: 'إضافة مسمى مخصص',
-    geminiLabel: 'Google Gemini API Key (مجاني)',
+    geminiLabel: 'Google Gemini API Key (اختياري - لمطابقة الـ CV والرسائل)',
     telegramTokenLabel: 'Telegram Bot Token',
     telegramChatIdLabel: 'Telegram Chat ID (معرف شات تليجرام الخاص بك)',
     scraperApiKeyLabel: 'ScraperAPI Key (اختياري - لمنع حظر Indeed)',
     githubTokenLabel: 'GitHub Personal Access Token (PAT)',
     githubRepoLabel: 'اسم مستودع البوت الجديد',
+    experienceLabel: 'سنوات الخبرة المطلوبة',
+    step5Title: '🎉 اكتمل الإعداد بنجاح!',
+    step5Desc: 'تم إنشاء مساعد الوظائف الخاص بك وتفعيله على خوادم GitHub. جاري تشغيل أول دورة فحص للوظائف في الخلفية الآن.',
+    countdownLabel: 'الفحص الأول يبدأ خلال:',
+    openTelegramBtn: 'فتح شات البوت على Telegram',
+    goToDashboardBtn: 'الذهاب للوحة التحكم 📊',
+    firstScanReady: 'البوت نشط ويعمل حالياً! تحقق من تليجرام.',
   },
   en: {
     wizardTitle: 'Setup Personal Bot',
@@ -156,18 +54,25 @@ const TRANSLATIONS = {
     visaSponsorshipLabel: 'Visa Sponsorship Status',
     nextBtn: 'Continue to Next Step',
     backBtn: 'Back',
-    deployBtn: 'Start Activation & Deploy 🚀',
+    deployBtn: 'Start Activation & Deploy',
     helpLink: 'How do I get this?',
     helpLinkPat: 'How do I get this?',
     jobSearchPlaceholder: 'Search or add a custom job title...',
     countrySearchPlaceholder: 'Search for target countries...',
     customJobBtn: 'Add custom title',
-    geminiLabel: 'Google Gemini API Key (Free)',
+    geminiLabel: 'Google Gemini API Key (Optional - for CV matching & templates)',
     telegramTokenLabel: 'Telegram Bot Token',
     telegramChatIdLabel: 'Telegram Chat ID (Your Chat ID)',
     scraperApiKeyLabel: 'ScraperAPI Key (Optional - Prevents Indeed blocks)',
     githubTokenLabel: 'GitHub Personal Access Token (PAT)',
     githubRepoLabel: 'New Bot Repository Name',
+    experienceLabel: 'Target Years of Experience',
+    step5Title: '🎉 Setup Completed Successfully!',
+    step5Desc: 'Your personal job assistant has been created and deployed to GitHub Actions. We are booting up and running the first scan cycle in the background now.',
+    countdownLabel: 'First scan runs in:',
+    openTelegramBtn: 'Open Bot Chat on Telegram',
+    goToDashboardBtn: 'Go to Dashboard 📊',
+    firstScanReady: 'Bot is active and running! Check Telegram for alerts.',
   }
 };
 
@@ -246,76 +151,143 @@ const GUIDE_COMPONENTS = {
   }
 };
 
-export default function SetupWizard({ language, onSuccess }: SetupWizardProps) {
+export default function SetupWizard({
+  language,
+  onSuccess,
+  initialGithubToken,
+  initialRepoName,
+  initialChatId
+}: SetupWizardProps) {
   const t = TRANSLATIONS[language];
   const [step, setStep] = useState(1);
+
+  // Auto-load existing config from GitHub when editing
+  React.useEffect(() => {
+    if (initialRepoName && initialGithubToken) {
+      const loadExistingConfig = async () => {
+        try {
+          const url = `https://api.github.com/repos/${initialRepoName}/contents/data/config.json`;
+          const res = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${initialGithubToken}`,
+              Accept: 'application/vnd.github.v3+json',
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const content = JSON.parse(Buffer.from(data.content, 'base64').toString('utf-8'));
+            if (content) {
+              if (content.gemini_api_key) setGeminiKey(content.gemini_api_key);
+              if (content.telegram_bot_token) setTgToken(content.telegram_bot_token);
+              if (content.scraperapi_key) setScraperApiKey(content.scraperapi_key);
+              
+              if (content.global_search) {
+                const gs = content.global_search;
+                if (gs.job_titles) setSelectedJobTitles(gs.job_titles);
+                if (gs.years_of_experience) setYearsOfExperience(gs.years_of_experience);
+                if (gs.exclude_keywords) setExcludeKeywords(gs.exclude_keywords.join(', '));
+                if (gs.scan_frequency) setScanFrequency(gs.scan_frequency);
+              }
+              if (content.target_countries) {
+                setTargetCountries(content.target_countries);
+              } else if (content.profiles?.[0]) {
+                const profile = content.profiles[0];
+                if (profile.job_titles) setSelectedJobTitles(profile.job_titles);
+                if (profile.years_of_experience) setYearsOfExperience(profile.years_of_experience);
+                if (profile.exclude_keywords) setExcludeKeywords(profile.exclude_keywords.join(', '));
+                if (profile.scan_frequency) setScanFrequency(profile.scan_frequency);
+                
+                const mappedCountries = (profile.countries || []).map((countryId: string) => ({
+                  country: countryId,
+                  remote_only: (profile.job_types || []).includes('remote'),
+                  requires_visa: (profile.visa_types || []).includes('sponsor_required'),
+                  min_match_score: profile.min_match_score || 65,
+                  active: profile.active ?? true
+                }));
+                setTargetCountries(mappedCountries);
+              }
+            }
+          }
+
+          // Load Cover Letter from GitHub if exists
+          try {
+            const clUrl = `https://api.github.com/repos/${initialRepoName}/contents/data/cover_letter.txt`;
+            const clRes = await fetch(clUrl, {
+              headers: {
+                Authorization: `Bearer ${initialGithubToken}`,
+                Accept: 'application/vnd.github.v3+json',
+              }
+            });
+            if (clRes.ok) {
+              const clData = await clRes.json();
+              const clText = Buffer.from(clData.content, 'base64').toString('utf-8');
+              if (clText) setCoverLetterText(clText);
+            }
+          } catch (e) {
+            console.error('Failed to load cover letter from GitHub:', e);
+          }
+
+          // Check if CV exists in repository
+          try {
+            const cvsUrl = `https://api.github.com/repos/${initialRepoName}/contents/data/cvs`;
+            const cvsRes = await fetch(cvsUrl, {
+              headers: {
+                Authorization: `Bearer ${initialGithubToken}`,
+                Accept: 'application/vnd.github.v3+json',
+              }
+            });
+            if (cvsRes.ok) {
+              const cvsData = await cvsRes.json();
+              if (Array.isArray(cvsData) && cvsData.length > 0) {
+                setCvFileName(cvsData[0].name);
+              }
+            }
+          } catch (e) {
+            console.error('Failed to check CV files from GitHub:', e);
+          }
+
+        } catch (e) {
+          console.error('Failed to load config from GitHub:', e);
+        }
+      };
+      loadExistingConfig();
+    }
+  }, [initialRepoName, initialGithubToken]);
+
   const [loading, setLoading] = useState(false);
   const [progressMsg, setProgressMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  const [deployedRepo, setDeployedRepo] = useState('');
+  const [deployedChatId, setDeployedChatId] = useState('');
+  const [deployedToken, setDeployedToken] = useState('');
+  const [botUsername, setBotUsername] = useState('');
+
   // Form States
   const [selectedJobTitles, setSelectedJobTitles] = useState<string[]>(['React Developer', 'Frontend Engineer']);
-  const [selectedCountries, setSelectedCountries] = useState<string[]>(['Germany']);
-  const [selectedJobTypes, setSelectedJobTypes] = useState<string[]>(['remote']);
-  const [selectedVisaTypes, setSelectedVisaTypes] = useState<string[]>(['sponsor_required']);
+  const [targetCountries, setTargetCountries] = useState<TargetCountryConfig[]>([
+    {
+      country: 'Germany',
+      remote_only: false,
+      requires_visa: true,
+      min_match_score: 65,
+      active: true
+    }
+  ]);
+  const [yearsOfExperience, setYearsOfExperience] = useState<string>('3-5');
+  const [cvBase64, setCvBase64] = useState('');
+  const [cvFileName, setCvFileName] = useState('');
+  const [coverLetterText, setCoverLetterText] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [tgToken, setTgToken] = useState('');
-  const [tgChatId, setTgChatId] = useState('');
+  const [tgChatId, setTgChatId] = useState(initialChatId || '');
   const [scraperApiKey, setScraperApiKey] = useState('');
-  const [githubToken, setGithubToken] = useState('');
-  const [githubRepo, setGithubRepo] = useState('sparkjobs-alerts');
+  const [githubToken, setGithubToken] = useState(initialGithubToken || '');
+  const [githubRepo, setGithubRepo] = useState(initialRepoName ? initialRepoName.split('/')[1] : 'sparkjobs-alerts');
 
-  // UI Dropdown States
-  const [jobDropdownOpen, setJobDropdownOpen] = useState(false);
-  const [jobSearch, setJobSearch] = useState('');
-  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
-  const [countrySearch, setCountrySearch] = useState('');
-  const [jobTypeDropdownOpen, setJobTypeDropdownOpen] = useState(false);
-  const [visaDropdownOpen, setVisaDropdownOpen] = useState(false);
-  const [activeHelp, setActiveHelp] = useState<string | null>(null);
-
-  // Filter Functions
-  const filteredJobTitles = COMMON_JOB_TITLES.filter(title => 
-    title.toLowerCase().includes(jobSearch.toLowerCase()) && !selectedJobTitles.includes(title)
-  );
-
-  const countries = COUNTRIES_LIST[language];
-  const filteredCountries = countries.filter(c => 
-    c.name.toLowerCase().includes(countrySearch.toLowerCase()) || 
-    c.id.toLowerCase().includes(countrySearch.toLowerCase())
-  );
-
-  const toggleCountry = (id: string) => {
-    if (selectedCountries.includes(id)) {
-      setSelectedCountries(selectedCountries.filter(c => c !== id));
-    } else {
-      setSelectedCountries([...selectedCountries, id]);
-    }
-  };
-
-  const toggleJobType = (id: string) => {
-    if (selectedJobTypes.includes(id)) {
-      setSelectedJobTypes(selectedJobTypes.filter(t => t !== id));
-    } else {
-      setSelectedJobTypes([...selectedJobTypes, id]);
-    }
-  };
-
-  const toggleVisaType = (id: string) => {
-    if (selectedVisaTypes.includes(id)) {
-      setSelectedVisaTypes(selectedVisaTypes.filter(v => v !== id));
-    } else {
-      setSelectedVisaTypes([...selectedVisaTypes, id]);
-    }
-  };
-
-  const handleAddCustomJob = () => {
-    const trimmed = jobSearch.trim();
-    if (trimmed && !selectedJobTitles.includes(trimmed)) {
-      setSelectedJobTitles([...selectedJobTitles, trimmed]);
-      setJobSearch('');
-    }
-  };
+  // Exclusion Keywords & Scan Frequency
+  const [excludeKeywords, setExcludeKeywords] = useState('');
+  const [scanFrequency, setScanFrequency] = useState('20m');
 
   const handleDeploy = async () => {
     setLoading(true);
@@ -341,22 +313,34 @@ export default function SetupWizard({ language, onSuccess }: SetupWizardProps) {
         telegram_bot_token: tgToken,
         telegram_chat_id: tgChatId,
         scraperapi_key: scraperApiKey,
-        profiles: [
-          {
-            name: "Default Profile",
-            job_titles: selectedJobTitles,
-            countries: selectedCountries,
-            job_types: selectedJobTypes,
-            visa_types: selectedVisaTypes,
-            min_match_score: 65,
-            cv_version: "default_cv",
-            active: true
-          }
-        ]
+        language: language,
+        global_search: {
+          job_titles: selectedJobTitles,
+          years_of_experience: yearsOfExperience,
+          exclude_keywords: excludeKeywords.split(',').map(s => s.trim()).filter(Boolean),
+          cv_version: "default_cv",
+          scan_frequency: scanFrequency
+        },
+        target_countries: targetCountries
       };
 
-      const cvText = `Skills: ${selectedJobTitles.join(', ')}. Locations: ${selectedCountries.join(', ')}. Types: ${selectedJobTypes.join(', ')}. Visa: ${selectedVisaTypes.join(', ')}.`;
-      const cvBase64 = btoa(unescape(encodeURIComponent(cvText)));
+      let finalCvBase64 = cvBase64;
+      let finalCvFileName = cvFileName;
+      const isReconfiguring = !!initialRepoName;
+
+      if (!finalCvBase64 && !isReconfiguring) {
+        const fallbackText = `Skills: ${selectedJobTitles.join(', ')}. Target Locations: ${targetCountries.map(tc => tc.country).join(', ')}.`;
+        finalCvBase64 = btoa(unescape(encodeURIComponent(fallbackText)));
+        finalCvFileName = 'default_cv.txt';
+      }
+
+      const fileExt = finalCvFileName ? (finalCvFileName.split('.').pop() || 'txt') : 'txt';
+      const cvFilenameOnRepo = finalCvFileName ? `default_cv.${fileExt}` : undefined;
+
+      let clBase64 = '';
+      if (coverLetterText.trim()) {
+        clBase64 = btoa(unescape(encodeURIComponent(coverLetterText.trim())));
+      }
 
       const configRes = await fetch('/api/setup/write-config', {
         method: 'POST',
@@ -365,8 +349,9 @@ export default function SetupWizard({ language, onSuccess }: SetupWizardProps) {
           github_token: githubToken,
           repo_name: fullRepoName,
           config_data: configData,
-          cv_filename: 'default_cv.txt',
-          cv_base64: cvBase64,
+          cv_filename: cvFilenameOnRepo || undefined,
+          cv_base64: finalCvBase64 || undefined,
+          cover_letter_base64: clBase64 || undefined,
         }),
       });
       if (!configRes.ok) throw new Error('Failed to write configuration');
@@ -382,6 +367,7 @@ export default function SetupWizard({ language, onSuccess }: SetupWizardProps) {
           telegram_token: tgToken,
           telegram_chat_id: tgChatId,
           scraperapi_key: scraperApiKey,
+          language: language,
         }),
       });
       if (!secretsRes.ok) throw new Error('Failed to write secrets');
@@ -397,8 +383,28 @@ export default function SetupWizard({ language, onSuccess }: SetupWizardProps) {
       });
       if (!enableRes.ok) throw new Error('Failed to trigger Action');
 
-      setProgressMsg(language === 'ar' ? '✅ اكتمل الإعداد بنجاح!' : '✅ Setup completed successfully!');
-      onSuccess(fullRepoName, tgChatId, githubToken);
+      setProgressMsg(language === 'ar' ? 'اكتمل الإعداد بنجاح!' : 'Setup completed successfully!');
+      
+      // Try to fetch Telegram Bot username
+      let username = '';
+      try {
+        const getMeRes = await fetch(`https://api.telegram.org/bot${tgToken}/getMe`);
+        if (getMeRes.ok) {
+          const getMeData = await getMeRes.json();
+          if (getMeData?.result?.username) {
+            username = getMeData.result.username;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch bot username:', e);
+      }
+      
+      setBotUsername(username);
+      setDeployedRepo(fullRepoName);
+      setDeployedChatId(tgChatId);
+      setDeployedToken(githubToken);
+      setStep(5);
+      setLoading(false);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error occurred during setup');
       setLoading(false);
@@ -416,13 +422,19 @@ export default function SetupWizard({ language, onSuccess }: SetupWizardProps) {
         <h2 className="text-lg font-bold tracking-tight text-white">
           {t.wizardTitle}
         </h2>
-        <span className="text-xs text-slate-400 font-semibold bg-white/[0.03] px-2.5 py-1 rounded-full border border-white/[0.05]">
-          {t.step} {step} {t.of} 3
-        </span>
+        {step < 5 ? (
+          <span className="text-xs text-slate-400 font-semibold bg-white/[0.03] px-2.5 py-1 rounded-full border border-white/[0.05]">
+            {t.step} {step} {t.of} 4
+          </span>
+        ) : (
+          <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+            {language === 'ar' ? 'اكتمل التفعيل' : 'Complete'}
+          </span>
+        )}
       </div>
 
       {errorMsg && (
-        <div className="mb-6 p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+        <div className="mb-6 p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs text-start">
           {errorMsg}
         </div>
       )}
@@ -435,416 +447,151 @@ export default function SetupWizard({ language, onSuccess }: SetupWizardProps) {
       ) : (
         <>
           {step === 1 && (
-            <div className="space-y-6">
-              
-              {/* Job Titles Search & Multi-Select */}
-              <div className="relative">
-                <label className="block text-slate-300 text-xs font-bold mb-2">{t.jobTitlesLabel}</label>
-                <div className="flex flex-wrap gap-1.5 p-2 rounded-md border border-white/[0.08] bg-[#030712] min-h-[40px] items-center">
-                  {selectedJobTitles.map(title => (
-                    <span key={title} className="inline-flex items-center gap-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs px-2.5 py-1 rounded">
-                      {title}
-                      <button type="button" onClick={() => setSelectedJobTitles(selectedJobTitles.filter(t => t !== title))}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setJobDropdownOpen(!jobDropdownOpen);
-                      setCountryDropdownOpen(false);
-                      setJobTypeDropdownOpen(false);
-                      setVisaDropdownOpen(false);
-                    }}
-                    className="text-slate-500 hover:text-white text-xs px-2 font-medium flex items-center gap-1 ms-auto"
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {jobDropdownOpen && (
-                  <div className="absolute z-30 mt-1 w-full rounded-md border border-white/[0.08] bg-[#050b18] shadow-lg p-2 space-y-2">
-                    <div className="relative">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
-                      <input
-                        type="text"
-                        placeholder={t.jobSearchPlaceholder}
-                        value={jobSearch}
-                        onChange={(e) => setJobSearch(e.target.value)}
-                        className="w-full h-8 pr-9 pl-3 rounded bg-[#030712] border border-white/[0.08] text-xs text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-                    <div className="max-h-36 overflow-y-auto space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-white/[0.02] [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-                      {filteredJobTitles.map(title => (
-                        <button
-                          key={title}
-                          type="button"
-                          onClick={() => {
-                            setSelectedJobTitles([...selectedJobTitles, title]);
-                            setJobSearch('');
-                          }}
-                          className="w-full h-8 px-3 rounded text-right text-xs text-slate-300 hover:bg-white/[0.04] block"
-                        >
-                          {title}
-                        </button>
-                      ))}
-                      {jobSearch.trim() && !COMMON_JOB_TITLES.includes(jobSearch.trim()) && (
-                        <button
-                          type="button"
-                          onClick={handleAddCustomJob}
-                          className="w-full h-8 px-3 rounded text-right text-xs text-blue-400 hover:bg-white/[0.04] flex items-center justify-between"
-                        >
-                          <span>{t.customJobBtn} "{jobSearch.trim()}"</span>
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Searchable Multi-Select Countries */}
-              <div className="relative">
-                <label className="block text-slate-300 text-xs font-bold mb-2">{t.countriesLabel}</label>
-                <div className="flex flex-wrap gap-1.5 p-2 rounded-md border border-white/[0.08] bg-[#030712] min-h-[40px] items-center">
-                  {selectedCountries.map(id => {
-                    const country = countries.find(c => c.id === id);
-                    return (
-                      <span key={id} className="inline-flex items-center gap-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs px-2.5 py-1 rounded">
-                        {country ? country.name.split(' ')[0] : id}
-                        <button type="button" onClick={() => setSelectedCountries(selectedCountries.filter(c => c !== id))}>
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCountryDropdownOpen(!countryDropdownOpen);
-                      setJobDropdownOpen(false);
-                      setJobTypeDropdownOpen(false);
-                      setVisaDropdownOpen(false);
-                    }}
-                    className="text-slate-500 hover:text-white text-xs px-2 font-medium flex items-center gap-1 ms-auto"
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {countryDropdownOpen && (
-                  <div className="absolute z-30 mt-1 w-full rounded-md border border-white/[0.08] bg-[#050b18] shadow-lg p-2 space-y-2">
-                    <div className="relative">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
-                      <input
-                        type="text"
-                        placeholder={t.countrySearchPlaceholder}
-                        value={countrySearch}
-                        onChange={(e) => setCountrySearch(e.target.value)}
-                        className="w-full h-8 pr-9 pl-3 rounded bg-[#030712] border border-white/[0.08] text-xs text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-                    <div className="max-h-36 overflow-y-auto space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-white/[0.02] [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-                      {filteredCountries.map((country) => (
-                        <button
-                          key={country.id}
-                          type="button"
-                          onClick={() => toggleCountry(country.id)}
-                          className="w-full h-8 px-3 rounded text-right text-xs text-slate-300 hover:bg-white/[0.04] flex items-center justify-between"
-                        >
-                          <span>{country.name}</span>
-                          {selectedCountries.includes(country.id) && <Check className="h-3.5 w-3.5 text-blue-500" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Multi-Select Job Type */}
-              <div className="relative">
-                <label className="block text-slate-300 text-xs font-bold mb-2">{t.jobTypesLabel}</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setJobTypeDropdownOpen(!jobTypeDropdownOpen);
-                    setCountryDropdownOpen(false);
-                    setJobDropdownOpen(false);
-                    setVisaDropdownOpen(false);
-                  }}
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 flex items-center justify-between focus:ring-1 focus:ring-blue-500 outline-none"
-                >
-                  <span className="truncate">
-                    {selectedJobTypes.length > 0
-                      ? selectedJobTypes.map(t => JOB_TYPES[language].find(jt => jt.id === t)?.name).join(', ')
-                      : '...'}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-slate-400" />
-                </button>
-
-                {jobTypeDropdownOpen && (
-                  <div className="absolute z-30 mt-1 w-full rounded-md border border-white/[0.08] bg-[#050b18] shadow-lg p-1 space-y-0.5">
-                    {JOB_TYPES[language].map((type) => (
-                      <button
-                        key={type.id}
-                        type="button"
-                        onClick={() => toggleJobType(type.id)}
-                        className="w-full h-9 px-3 rounded text-right text-xs text-slate-300 hover:bg-white/[0.04] flex items-center justify-between"
-                      >
-                        <span>{type.name}</span>
-                        {selectedJobTypes.includes(type.id) && <Check className="h-4 w-4 text-blue-500" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Multi-Select Visa Sponsorship */}
-              <div className="relative">
-                <label className="block text-slate-300 text-xs font-bold mb-2">{t.visaSponsorshipLabel}</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVisaDropdownOpen(!visaDropdownOpen);
-                    setJobTypeDropdownOpen(false);
-                    setCountryDropdownOpen(false);
-                    setJobDropdownOpen(false);
-                  }}
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 flex items-center justify-between focus:ring-1 focus:ring-blue-500 outline-none"
-                >
-                  <span className="truncate">
-                    {selectedVisaTypes.length > 0
-                      ? selectedVisaTypes.map(v => VISA_TYPES[language].find(vt => vt.id === v)?.name).join(', ')
-                      : '...'}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-slate-400" />
-                </button>
-
-                {visaDropdownOpen && (
-                  <div className="absolute z-30 mt-1 w-full rounded-md border border-white/[0.08] bg-[#050b18] shadow-lg p-1 space-y-0.5">
-                    {VISA_TYPES[language].map((type) => (
-                      <button
-                        key={type.id}
-                        type="button"
-                        onClick={() => toggleVisaType(type.id)}
-                        className="w-full h-9 px-3 rounded text-right text-xs text-slate-300 hover:bg-white/[0.04] flex items-center justify-between"
-                      >
-                        <span>{type.name}</span>
-                        {selectedVisaTypes.includes(type.id) && <Check className="h-4 w-4 text-blue-500" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => {
-                  setStep(2);
-                  setCountryDropdownOpen(false);
-                  setJobTypeDropdownOpen(false);
-                  setJobDropdownOpen(false);
-                  setVisaDropdownOpen(false);
-                }}
-                className="w-full h-10 mt-8 rounded-md bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-white font-semibold text-sm flex items-center justify-center gap-2"
-              >
-                {t.nextBtn}
-                <ArrowRight className={`h-4 w-4 ${language === 'ar' ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
+            <Step1Profile
+              language={language}
+              t={t}
+              selectedJobTitles={selectedJobTitles}
+              setSelectedJobTitles={setSelectedJobTitles}
+              targetCountries={targetCountries}
+              setTargetCountries={setTargetCountries}
+              yearsOfExperience={yearsOfExperience}
+              setYearsOfExperience={setYearsOfExperience}
+              excludeKeywords={excludeKeywords}
+              setExcludeKeywords={setExcludeKeywords}
+              scanFrequency={scanFrequency}
+              setScanFrequency={setScanFrequency}
+              onNext={() => setStep(2)}
+            />
           )}
 
           {step === 2 && (
-            <div className="space-y-5">
-              
-              {/* Gemini Key */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-slate-300 text-xs font-bold">{t.geminiLabel}</label>
-                  <button 
-                    onClick={() => setActiveHelp(activeHelp === 'gemini' ? null : 'gemini')}
-                    className="text-blue-400 text-[10px] font-semibold flex items-center gap-1 hover:underline"
-                  >
-                    <HelpCircle className="h-3 w-3" />
-                    {t.helpLink}
-                  </button>
-                </div>
-                {activeHelp === 'gemini' && (
-                  <div className="p-3 mb-2 rounded bg-white/[0.03] border border-white/[0.05] text-[11px] text-slate-400 leading-relaxed">
-                    {GUIDE_COMPONENTS[language].gemini}
-                  </div>
-                )}
-                <input
-                  type="password"
-                  value={geminiKey}
-                  onChange={(e) => setGeminiKey(e.target.value)}
-                  placeholder="AIStudio key..."
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              {/* Telegram Bot Token */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-slate-300 text-xs font-bold">{t.telegramTokenLabel}</label>
-                  <button 
-                    onClick={() => setActiveHelp(activeHelp === 'bot' ? null : 'bot')}
-                    className="text-blue-400 text-[10px] font-semibold flex items-center gap-1 hover:underline"
-                  >
-                    <HelpCircle className="h-3 w-3" />
-                    {t.helpLink}
-                  </button>
-                </div>
-                {activeHelp === 'bot' && (
-                  <div className="p-3 mb-2 rounded bg-white/[0.03] border border-white/[0.05] text-[11px] text-slate-400 leading-relaxed">
-                    {GUIDE_COMPONENTS[language].bot}
-                  </div>
-                )}
-                <input
-                  type="password"
-                  value={tgToken}
-                  onChange={(e) => setTgToken(e.target.value)}
-                  placeholder="123456:ABC-DEF..."
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              {/* Telegram Chat ID */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-slate-300 text-xs font-bold">{t.telegramChatIdLabel}</label>
-                  <button 
-                    onClick={() => setActiveHelp(activeHelp === 'chat' ? null : 'chat')}
-                    className="text-blue-400 text-[10px] font-semibold flex items-center gap-1 hover:underline"
-                  >
-                    <HelpCircle className="h-3 w-3" />
-                    {t.helpLink}
-                  </button>
-                </div>
-                {activeHelp === 'chat' && (
-                  <div className="p-3 mb-2 rounded bg-white/[0.03] border border-white/[0.05] text-[11px] text-slate-400 leading-relaxed">
-                    {GUIDE_COMPONENTS[language].chat}
-                  </div>
-                )}
-                <input
-                  type="text"
-                  value={tgChatId}
-                  onChange={(e) => setTgChatId(e.target.value)}
-                  placeholder="987654321"
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              {/* ScraperAPI Key */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-slate-300 text-xs font-bold">{t.scraperApiKeyLabel}</label>
-                  <button 
-                    onClick={() => setActiveHelp(activeHelp === 'proxy' ? null : 'proxy')}
-                    className="text-blue-400 text-[10px] font-semibold flex items-center gap-1 hover:underline"
-                  >
-                    <HelpCircle className="h-3 w-3" />
-                    {t.helpLink}
-                  </button>
-                </div>
-                {activeHelp === 'proxy' && (
-                  <div className="p-3 mb-2 rounded bg-white/[0.03] border border-white/[0.05] text-[11px] text-slate-400 leading-relaxed">
-                    {GUIDE_COMPONENTS[language].proxy}
-                  </div>
-                )}
-                <input
-                  type="password"
-                  value={scraperApiKey}
-                  onChange={(e) => setScraperApiKey(e.target.value)}
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div className="flex gap-4 mt-8">
-                <button
-                  onClick={() => {
-                    setStep(1);
-                    setActiveHelp(null);
-                  }}
-                  className="flex-1 h-10 rounded-md border border-white/[0.08] hover:bg-white/[0.04] text-slate-300 text-sm transition-all"
-                >
-                  {t.backBtn}
-                </button>
-                <button
-                  onClick={() => {
-                    setStep(3);
-                    setActiveHelp(null);
-                  }}
-                  className="flex-1 h-10 rounded-md bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-white font-semibold text-sm flex items-center justify-center gap-2"
-                >
-                  {t.nextBtn}
-                  <ArrowRight className={`h-4 w-4 ${language === 'ar' ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-            </div>
+            <CvUploadPanel
+              language={language}
+              cvFileName={cvFileName}
+              coverLetterText={coverLetterText}
+              onChangeCv={(fileName, base64) => {
+                setCvFileName(fileName);
+                setCvBase64(base64);
+              }}
+              onChangeCoverLetter={setCoverLetterText}
+              onError={setErrorMsg}
+              onBack={() => setStep(1)}
+              onNext={() => setStep(3)}
+            />
           )}
 
           {step === 3 && (
-            <div className="space-y-5">
-              
-              {/* GitHub PAT */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-slate-300 text-xs font-bold">{t.githubTokenLabel}</label>
-                  <button 
-                    onClick={() => setActiveHelp(activeHelp === 'github' ? null : 'github')}
-                    className="text-blue-400 text-[10px] font-semibold flex items-center gap-1 hover:underline"
-                  >
-                    <HelpCircle className="h-3 w-3" />
-                    {t.helpLinkPat}
-                  </button>
-                </div>
-                {activeHelp === 'github' && (
-                  <div className="p-3 mb-2 rounded bg-white/[0.03] border border-white/[0.05] text-[11px] text-slate-400 leading-relaxed">
-                    {GUIDE_COMPONENTS[language].github}
-                  </div>
-                )}
-                <input
-                  type="password"
-                  value={githubToken}
-                  onChange={(e) => setGithubToken(e.target.value)}
-                  placeholder="ghp_..."
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-              </div>
+            <Step3Credentials
+              language={language}
+              t={t}
+              GUIDE_COMPONENTS={GUIDE_COMPONENTS[language]}
+              geminiKey={geminiKey}
+              setGeminiKey={setGeminiKey}
+              tgToken={tgToken}
+              setTgToken={setTgToken}
+              tgChatId={tgChatId}
+              setTgChatId={setTgChatId}
+              scraperApiKey={scraperApiKey}
+              setScraperApiKey={setScraperApiKey}
+              onBack={() => setStep(2)}
+              onNext={() => setStep(4)}
+            />
+          )}
 
-              {/* Repo Name */}
-              <div>
-                <label className="block text-slate-300 text-xs font-bold mb-2">{t.githubRepoLabel}</label>
-                <input
-                  type="text"
-                  value={githubRepo}
-                  onChange={(e) => setGithubRepo(e.target.value)}
-                  className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-              </div>
+          {step === 4 && (
+            <Step4Deploy
+              language={language}
+              t={t}
+              GUIDE_COMPONENTS={GUIDE_COMPONENTS[language]}
+              githubToken={githubToken}
+              setGithubToken={setGithubToken}
+              githubRepo={githubRepo}
+              setGithubRepo={setGithubRepo}
+              onBack={() => setStep(3)}
+              onDeploy={handleDeploy}
+            />
+          )}
 
-              <div className="flex gap-4 mt-8">
-                <button
-                  onClick={() => {
-                    setStep(2);
-                    setActiveHelp(null);
-                  }}
-                  className="flex-1 h-10 rounded-md border border-white/[0.08] hover:bg-white/[0.04] text-slate-300 text-sm transition-all"
-                >
-                  {t.backBtn}
-                </button>
-                <button
-                  onClick={handleDeploy}
-                  className="flex-1 h-10 rounded-md bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-white font-semibold text-sm flex items-center justify-center gap-2"
-                >
-                  {t.deployBtn}
-                </button>
-              </div>
-            </div>
+          {step === 5 && (
+            <Step5Complete
+              language={language}
+              t={t}
+              botUsername={botUsername}
+              onGoToDashboard={() => onSuccess(deployedRepo, deployedChatId, deployedToken)}
+            />
           )}
         </>
       )}
+    </div>
+  );
+}
+
+interface Step5CompleteProps {
+  language: 'ar' | 'en';
+  t: any;
+  botUsername: string;
+  onGoToDashboard: () => void;
+}
+
+function Step5Complete({ language, t, botUsername, onGoToDashboard }: Step5CompleteProps) {
+  const [countdown, setCountdown] = useState(60);
+
+  React.useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown(c => c - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  const botUrl = botUsername ? `https://t.me/${botUsername}` : 'https://t.me';
+
+  return (
+    <div className="space-y-6 text-center py-6 font-sans">
+      <div className="mx-auto h-16 w-16 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400">
+        <Check className="h-8 w-8 animate-pulse" />
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-xl font-bold text-white">{t.step5Title}</h3>
+        <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">{t.step5Desc}</p>
+      </div>
+
+      {/* Countdown Box */}
+      <div className="p-4 rounded-xl border border-white/[0.04] bg-[#030712]/50 max-w-xs mx-auto">
+        <span className="text-[10px] text-slate-500 block mb-1 uppercase font-bold tracking-wider">
+          {t.countdownLabel}
+        </span>
+        {countdown > 0 ? (
+          <span className="text-2xl font-black text-blue-400 font-mono">
+            00:{countdown < 10 ? `0${countdown}` : countdown}
+          </span>
+        ) : (
+          <span className="text-xs font-bold text-emerald-400 flex items-center justify-center gap-1">
+            <Check className="h-3.5 w-3.5 animate-bounce" />
+            {t.firstScanReady}
+          </span>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="space-y-3 pt-4">
+        <a
+          href={botUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="w-full h-10 rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 hover:scale-[1.02] active:scale-[0.98] transition-all text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 font-sans"
+        >
+          {t.openTelegramBtn}
+        </a>
+        
+        <button
+          onClick={onGoToDashboard}
+          className="w-full h-10 rounded-md border border-white/[0.08] hover:bg-white/[0.04] text-slate-300 font-semibold text-xs transition-all flex items-center justify-center gap-1 font-sans"
+        >
+          {t.goToDashboardBtn}
+        </button>
+      </div>
     </div>
   );
 }

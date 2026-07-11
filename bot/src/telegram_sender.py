@@ -1,6 +1,8 @@
 import requests
 import html
 
+SPARKGEN_FOOTER = "\n\n─────────────────\nPowered by <a href='https://sparkgen.net'>SparkGen</a>"
+
 def escape_html(text: str) -> str:
     """
     Escapes special HTML characters so Telegram doesn't crash.
@@ -9,7 +11,7 @@ def escape_html(text: str) -> str:
         return ""
     return html.escape(str(text))
 
-def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: dict, profile_name: str) -> bool:
+def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: dict, profile_name: str, language: str = "ar") -> bool:
     """
     Sends a beautifully formatted HTML job alert message to Telegram.
     """
@@ -19,12 +21,20 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
 
     # 1. Format the Safety/Risk Rating Badge
     risk_level = ai_analysis.get("risk_level", "Low")
-    if risk_level == "High":
-        safety_badge = "🔴 <b>HIGH RISK (SCAM/GHOST)</b>"
-    elif risk_level == "Medium":
-        safety_badge = "🟡 <b>MEDIUM RISK</b>"
+    if language == "ar":
+        if risk_level == "High":
+            safety_badge = "🔴 <b>مخاطر عالية (وظيفة وهمية/احتيال)</b>"
+        elif risk_level == "Medium":
+            safety_badge = "🟡 <b>مخاطر متوسطة</b>"
+        else:
+            safety_badge = "🟢 <b>مخاطر منخفضة</b>"
     else:
-        safety_badge = "🟢 <b>LOW RISK</b>"
+        if risk_level == "High":
+            safety_badge = "🔴 <b>HIGH RISK (SCAM/GHOST)</b>"
+        elif risk_level == "Medium":
+            safety_badge = "🟡 <b>MEDIUM RISK</b>"
+        else:
+            safety_badge = "🟢 <b>LOW RISK</b>"
 
     risk_reason = ai_analysis.get("risk_reason", "")
     if risk_reason:
@@ -32,6 +42,7 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
 
     # 2. Extract job metrics
     match_score = ai_analysis.get("match_score", 0)
+    estimated_salary = ai_analysis.get("estimated_salary", "غير محدد" if language == "ar" else "Not specified")
     pros = "\n".join([f"• {escape_html(p)}" for p in ai_analysis.get("pros", [])])
     cons = "\n".join([f"• {escape_html(c)}" for c in ai_analysis.get("cons", [])])
     missing = ", ".join([escape_html(m) for m in ai_analysis.get("missing_keywords", [])])
@@ -40,34 +51,72 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     outreach = ai_analysis.get("outreach_message", "")
     
     # 4. Construct the HTML message body
-    message = f"""🔔 <b>وظيفة جديدة | {escape_html(profile_name)}</b>
-
-💼 <b>{escape_html(job.get('title', ''))}</b>
-🏢 <b>{escape_html(job.get('company', ''))}</b> · {escape_html(job.get('location', ''))}
-🌐 المصدر: {escape_html(job.get('source', ''))}
-
+    if language == "ar":
+        message = f"""<b>وظيفة جديدة | {escape_html(profile_name)}</b>
+ 
+<b>{escape_html(job.get('title', ''))}</b>
+<b>{escape_html(job.get('company', ''))}</b> · {escape_html(job.get('location', ''))}
+المصدر: {escape_html(job.get('source', ''))}
+ 
 ──────────────────
-🛡️ <b>تقييم الأمان:</b> {safety_badge}
-
-🎯 <b>توافق الـ CV:</b> {match_score}%
+تقييم الأمان: {safety_badge}
+ 
+الراتب التقديري: {escape_html(estimated_salary)}
+ 
+توافق الـ CV: {match_score}%
 {"<b>✅ نقاط القوة:</b>\n" + pros if pros else ""}
 {"<b>⚠️ فجوات:</b>\n" + cons if cons else ""}
 {"<b>🔍 كلمات مفتاحية ناقصة:</b> " + missing if missing else ""}
-
-✉️ <b>رسالة التواصل مع الـ Recruiter:</b>
+ 
+رسالة التواصل مع الـ Recruiter:
 <code>{escape_html(outreach)}</code>
-
+ 
 ──────────────────
-🔗 <a href="{job.get('url', '')}">قدّم الآن (Apply Now)</a>
+رابط التقديم: <a href="{job.get('url', '')}">قدّم الآن (Apply Now)</a>{SPARKGEN_FOOTER}
 """
+    else:
+        message = f"""<b>New Job Match | {escape_html(profile_name)}</b>
+ 
+<b>{escape_html(job.get('title', ''))}</b>
+<b>{escape_html(job.get('company', ''))}</b> · {escape_html(job.get('location', ''))}
+Source: {escape_html(job.get('source', ''))}
+ 
+──────────────────
+Safety Rating: {safety_badge}
+ 
+Est. Salary: {escape_html(estimated_salary)}
+ 
+CV Match Score: {match_score}%
+{"<b>✅ Strengths:</b>\n" + pros if pros else ""}
+{"<b>⚠️ Gaps:</b>\n" + cons if cons else ""}
+{"<b>🔍 Missing Keywords:</b> " + missing if missing else ""}
+ 
+Recruiter Outreach Message:
+<code>{escape_html(outreach)}</code>
+ 
+──────────────────
+Application Link: <a href="{job.get('url', '')}">Apply Now</a>{SPARKGEN_FOOTER}
+"""
+
     
-    # Send request to Telegram
+    btn_applied = "تم التقديم ✅" if language == "ar" else "Applied ✅"
+    btn_ignore = "تجاهل ❌" if language == "ar" else "Ignore ❌"
+    
+    # Send request to Telegram with inline buttons
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML",
-        "disable_web_page_preview": True
+        "disable_web_page_preview": True,
+        "reply_markup": {
+            "inline_keyboard": [
+                [
+                    {"text": btn_applied, "callback_data": f"applied:{job['id']}"},
+                    {"text": btn_ignore, "callback_data": f"ignore:{job['id']}"}
+                ]
+            ]
+        }
     }
     
     try:
@@ -80,6 +129,32 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
             return False
     except Exception as e:
         print(f"Error sending Telegram alert: {e}")
+        return False
+
+def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
+    """
+    Sends a plain text message to Telegram.
+    """
+    if not bot_token or not chat_id:
+        print("Missing Telegram bot_token or chat_id. Message not sent.")
+        return False
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            print("Telegram message sent successfully.")
+            return True
+        else:
+            print(f"Failed to send Telegram message: {response.text}")
+            return False
+    except Exception as e:
+        print(f"Error sending Telegram message: {e}")
         return False
 
 if __name__ == "__main__":

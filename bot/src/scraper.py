@@ -24,6 +24,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
     jobs_list = []
     try:
         # Determine country parameter for Indeed based on location
+        # Covers all 18 countries available in the setup wizard
         country_map = {
             "germany": "germany",
             "united kingdom": "uk",
@@ -34,11 +35,24 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
             "canada": "canada",
             "france": "france",
             "saudi arabia": "saudiarabia",
+            "ksa": "saudiarabia",
+            "united arab emirates": "uae",
             "uae": "uae",
-            "egypt": "egypt"
+            "egypt": "egypt",
+            "qatar": "qatar",
+            "kuwait": "kuwait",
+            "oman": "oman",
+            "bahrain": "bahrain",
+            "jordan": "jordan",
+            "netherlands": "netherlands",
+            "sweden": "sweden",
+            "switzerland": "switzerland",
+            "australia": "australia",
+            "worldwide": "worldwide",
+            "remote": "worldwide",
         }
-        
-        country_indeed = "usa" # default
+
+        country_indeed = "worldwide"  # default — safer than "usa" for unknown entries
         loc_lower = location.lower()
         for k, v in country_map.items():
             if k in loc_lower:
@@ -222,6 +236,8 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "") -
     jobspy_sites = ["google"]
     if scraperapi_key: # Only scrape Indeed/ZipRecruiter if proxy is available to prevent immediate Action bans
         jobspy_sites.extend(["indeed", "zip_recruiter"])
+    else:
+        print("Warning: No ScraperAPI key provided. Skipping Indeed and ZipRecruiter scrapes to prevent IP blocking, and running Google Jobs without a proxy.")
         
     jobspy_jobs = scrape_jobspy(
         site_name=jobspy_sites,

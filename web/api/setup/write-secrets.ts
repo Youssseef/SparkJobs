@@ -58,9 +58,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     telegram_token,
     telegram_chat_id,
     scraperapi_key,
+    language,
   } = req.body;
 
-  if (!github_token || !repo_name || !gemini_key || !telegram_token || !telegram_chat_id) {
+  if (!github_token || !repo_name || !telegram_token || !telegram_chat_id) {
     return res.status(400).json({ error: 'Missing required configuration keys' });
   }
 
@@ -75,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Define secrets to write
     const secretsMap: Record<string, string> = {
-      GEMINI_API_KEY: gemini_key,
+      GEMINI_API_KEY: gemini_key || '',
       TELEGRAM_BOT_TOKEN: telegram_token,
       TELEGRAM_CHAT_ID: telegram_chat_id,
       SCRAPERAPI_KEY: scraperapi_key || '',
@@ -95,12 +96,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       github_repo: repo_name,
       github_token: github_token,
       telegram_bot_token: telegram_token,
+      language: language || 'ar',
     });
 
     // Also register Webhook to Telegram Bot
     const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL || ''}/api/telegram/webhook`;
     const tgWebhookSetupUrl = `https://api.telegram.org/bot${telegram_token}/setWebhook?url=${webhookUrl}`;
     await fetch(tgWebhookSetupUrl);
+
+    // Send immediate proactive welcome message on Telegram
+    const welcomeMsg = language === 'ar'
+      ? `✅ تم تفعيل بوت SparkJobs بنجاح على حسابك.\n\nسيقوم البوت بفحص منصات التوظيف وإرسال التنبيهات لك هنا تلقائياً.\nللتحكم في البوت وإدارته، اكتب /help في أي وقت.`
+      : `✅ SparkJobs is now active on your account.\n\nYour bot will scan job boards every 20 minutes and alert you here.\nTo manage your bot, type /help at any time.`;
+    const tgSendMessageUrl = `https://api.telegram.org/bot${telegram_token}/sendMessage`;
+    try {
+      await fetch(tgSendMessageUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: telegram_chat_id,
+          text: welcomeMsg,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to send Telegram welcome message:', e);
+    }
 
     return res.status(200).json({ success: true });
   } catch (error) {

@@ -17,6 +17,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^20.11.24",
     "@types/react": "^18.2.60",
     "autoprefixer": "^10.4.18",

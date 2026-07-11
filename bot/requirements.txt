@@ -1,5 +1,5 @@
 python-jobspy>=1.1.53
-google-generativeai>=0.4.1
+google-genai>=2.11.0
 pypdf>=4.1.0
 requests>=2.31.0
 python-dotenv>=1.0.1

@@ -24,18 +24,18 @@ export default function CvUploadPanel({
 }: CvUploadPanelProps) {
   const t = {
     ar: {
-      cvLabel: 'رفع السيرة الذاتية (CV)',
+      cvLabel: 'رفع السيرة الذاتية',
       cvUploadPlaceholder: 'اختر ملف PDF أو Word (.pdf, .docx)',
-      coverLetterLabel: 'رسالة التغطية / الإلهام (Cover Letter - اختياري)',
-      coverLetterPlaceholder: 'الصق هنا رسالة تغطية سابقة لمساعدة الذكاء الاصطناعي في صياغة الرسائل بأسلوبك...',
+      coverLetterLabel: 'خطاب التقديم (اختياري)',
+      coverLetterPlaceholder: 'الصق هنا خطاب تقديم سابق لمساعدة الذكاء الاصطناعي في مطابقة أسلوبك...',
       fileSelected: 'الملف المحدد:',
       backBtn: 'الرجوع',
       nextBtn: 'المتابعة للخطوة التالية',
     },
     en: {
-      cvLabel: 'Upload CV (Resume)',
+      cvLabel: 'Upload Resume / CV',
       cvUploadPlaceholder: 'Select a PDF or Word file (.pdf, .docx)',
-      coverLetterLabel: 'Cover Letter Inspiration (Optional)',
+      coverLetterLabel: 'Cover Letter (Optional)',
       coverLetterPlaceholder: 'Paste a previous cover letter here to help the AI match your writing style...',
       fileSelected: 'Selected file:',
       backBtn: 'Back',

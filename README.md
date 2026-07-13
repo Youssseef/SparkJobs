@@ -18,6 +18,15 @@ It consists of two main parts:
 
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Premium Layout Spacing & Responsive Grid Updates (July 2026):**
+    *   **Unified Spacing & Padding:** Aligned page padding to `px-6 sm:px-8` (matching the nav bar's responsive widths) and increased vertical margins to `py-12 md:py-16` to clear the sticky header elegantly across all viewport widths.
+    *   **Tightened Hierarchy:** Grouped breadcrumbs and title elements in a `.space-y-2` container to keep them visually unified rather than split apart by global column styles.
+    *   **Language-Aware Typography Leading:** Replaced static `leading-relaxed` with dynamic `language === 'ar' ? 'leading-relaxed' : 'leading-tight'` logic, maintaining Cairo font readability while tightening English headers.
+    *   **Active Grid Breakpoint Tuning (`lg` -> `md`):** Shifted 2-column layout activation to `md` (768px) to eliminate large empty spaces on the right side of tablet/medium screens and keep the Setup Wizard card properly aligned.
+    *   **Vertical Alignment & SetupWizard Spacing:** Reverted grid vertical alignment to centered `items-center` mode. Compacted the SetupWizard card wrapper padding from `p-8` to `p-5 sm:p-6` and header margin to `mb-6` to make the form container more compact and prevent top overlaps.
+    *   **Compact Standalone Spacing:** Reduced root vertical padding on the standalone client to `py-8 md:py-12` and horizontal padding to `px-4 sm:px-6` to make it more compact.
+    *   **UX Writing Simplification & Icon-Only CTA:** Shortened labels, placeholders, and descriptions across all 5 wizard steps (e.g. `Target Years of Experience` -> `Experience Level`, `Automatic Scan Frequency` -> `Scan Frequency`, `Requires Visa Sponsorship` -> `Visa Sponsorship`). Replaced the text-heavy `+ Add Country` button with a clean `w-8 h-8 rounded-lg` square icon-only button to improve column alignment.
+    *   **Country Card Grid Shift:** Shifted internal country card controls grid to stacked layout (`grid-cols-1`) for tablet and mobile sizes (under `lg:grid-cols-2` / 1024px) to prevent toggle-switch overlaps.
 *   **State Persistence & Ephemeral Storage Fix:** The GitHub Actions workflow (`scan.yml`) now commits and pushes both `seen_jobs.json` (deduplication database) and `status_tracker.json` (dashboard stats) back to the user's private repository after every scan. This ensures that dashboard metrics correctly accumulate over time instead of resetting on ephemeral runner shutdowns.
 *   **Security Isolation & Dev Environment Protection:** Local testing files (like `bot/test_live_alert.py`) are configured to load keys securely from environment variables (`os.environ.get`) instead of hardcoded strings, and are permanently ignored via `.gitignore` to prevent accidental credential leaks.
 *   **New Google GenAI SDK Migration:** Migrated the bot from the legacy `google-generativeai` package to the new `google.genai` SDK for future-proof API compatibility.

@@ -293,7 +293,7 @@ export default function Step1Profile({
           {/* Scan Frequency Selector */}
           <div>
             <label className="block text-slate-300 text-xs font-bold mb-2">
-              {language === 'ar' ? 'معدل تكرار البحث التلقائي' : 'Automatic Scan Frequency'}
+              {language === 'ar' ? 'تكرار الفحص' : 'Scan Frequency'}
             </label>
             <div className="relative inline-flex items-center w-full">
               <select
@@ -316,7 +316,7 @@ export default function Step1Profile({
         {/* Exclusion Keywords */}
         <div className="font-sans">
           <label className="block text-slate-300 text-xs font-bold mb-2">
-            {language === 'ar' ? 'الكلمات المستبعدة (تفصل بفاصلة)' : 'Exclusion Keywords (comma separated)'}
+            {language === 'ar' ? 'الكلمات المستبعدة' : 'Exclusion Keywords'}
           </label>
           <input
             type="text"
@@ -344,10 +344,11 @@ export default function Step1Profile({
                 setCountryDropdownOpen(!countryDropdownOpen);
                 setJobDropdownOpen(false);
               }}
-              className="px-3 h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all"
+              className="w-8 h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all"
+              aria-label={language === 'ar' ? 'إضافة بلد' : 'Add Country'}
+              title={language === 'ar' ? 'إضافة بلد' : 'Add Country'}
             >
-              <Plus className="h-3.5 w-3.5" />
-              {language === 'ar' ? 'إضافة بلد' : 'Add Country'}
+              <Plus className="h-4 w-4" />
             </button>
 
             {countryDropdownOpen && (
@@ -422,7 +423,7 @@ export default function Step1Profile({
                   </div>
 
                   {/* Card Controls Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     
                     {/* Toggles */}
                     <div className="space-y-3">
@@ -448,7 +449,7 @@ export default function Step1Profile({
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-slate-300 flex items-center gap-1.5">
                             <Shield className="h-3.5 w-3.5 text-purple-400" />
-                            {language === 'ar' ? 'يتطلب تأشيرة / رعاية' : 'Requires Visa Sponsorship'}
+                            {language === 'ar' ? 'رعاية التأشيرة' : 'Visa Sponsorship'}
                           </span>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input 
@@ -469,7 +470,7 @@ export default function Step1Profile({
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-slate-300 flex items-center gap-1.5">
                           <Target className="h-3.5 w-3.5 text-orange-400" />
-                          {language === 'ar' ? 'الحد الأدنى للقبول (AI)' : 'Min match score (AI)'}
+                          {language === 'ar' ? 'حد القبول (AI)' : 'Min Match (AI)'}
                         </span>
                         <span className="text-xs font-bold text-blue-400">{tc.min_match_score}%</span>
                       </div>

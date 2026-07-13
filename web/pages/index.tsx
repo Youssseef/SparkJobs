@@ -55,7 +55,7 @@ export default function Home() {
   const t = PAGE_TRANSLATIONS[language];
 
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans select-none relative overflow-hidden py-16" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans select-none relative overflow-hidden py-8 md:py-12" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       
       {/* Background Glows matching SparkGen Theme */}
       <div className="absolute inset-0 max-h-full overflow-hidden pointer-events-none z-0">
@@ -83,27 +83,30 @@ export default function Home() {
       </div>
 
       {/* Hero Section / Main Content Area */}
-      <main className="flex-1 w-full max-w-6xl mx-auto px-6 flex flex-col justify-center relative z-10">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 flex flex-col justify-center relative z-10">
         
         {!setupData || isEditing ? (
-          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 items-center">
             
             {/* Left Column: Premium Pitch */}
-            <div className="lg:col-span-6 space-y-6 text-start">
+            <div className="md:col-span-6 space-y-6 text-start">
               
-              {/* Breadcrumbs */}
-              <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 mb-2" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-                <a href="https://sparkgen.app" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
-                  {t.breadcrumbParent}
-                </a>
-                <ChevronRight className={`h-3 w-3 text-slate-600 ${language === 'ar' ? 'rotate-180' : ''}`} />
-                <span className="text-blue-400">{t.breadcrumbChild}</span>
+              {/* Header Text Group */}
+              <div className="space-y-2">
+                {/* Breadcrumbs */}
+                <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+                  <a href="https://sparkgen.app" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
+                    {t.breadcrumbParent}
+                  </a>
+                  <ChevronRight className={`h-3 w-3 text-slate-600 ${language === 'ar' ? 'rotate-180' : ''}`} />
+                  <span className="text-blue-400">{t.breadcrumbChild}</span>
+                </div>
+                
+                <h1 className={`text-3xl md:text-4xl font-black tracking-tight text-white ${language === 'ar' ? 'leading-relaxed' : 'leading-tight'}`}>
+                  {t.heroTitlePart1} <br />
+                  {t.heroTitlePart2}
+                </h1>
               </div>
-              
-              <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white leading-relaxed">
-                {t.heroTitlePart1} <br />
-                {t.heroTitlePart2}
-              </h1>
               
               <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-md">
                 {t.heroDesc}
@@ -163,7 +166,7 @@ export default function Home() {
             </div>
 
             {/* Right Column: Setup Wizard */}
-            <div className="lg:col-span-6 w-full">
+            <div className="md:col-span-6 w-full">
               <SetupWizard
                 language={language}
                 initialGithubToken={setupData?.githubToken}

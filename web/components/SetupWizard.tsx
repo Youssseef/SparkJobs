@@ -18,10 +18,10 @@ const TRANSLATIONS = {
     wizardTitle: 'إعداد البوت الشخصي',
     step: 'الخطوة',
     of: 'من',
-    jobTitlesLabel: 'المسميات الوظيفية المستهدفة',
-    countriesLabel: 'الدول المستهدفة للبحث',
+    jobTitlesLabel: 'المسميات الوظيفية',
+    countriesLabel: 'الدول المستهدفة',
     jobTypesLabel: 'نوع العمل المطلوب',
-    visaSponsorshipLabel: 'حالة رعاية التأشيرة',
+    visaSponsorshipLabel: 'رعاية التأشيرة',
     nextBtn: 'المتابعة للخطوة التالية',
     backBtn: 'الرجوع',
     deployBtn: 'بدء التفعيل والتشغيل',
@@ -30,13 +30,13 @@ const TRANSLATIONS = {
     jobSearchPlaceholder: 'ابحث أو اكتب مسمى وظيفي مخصص...',
     countrySearchPlaceholder: 'ابحث عن دولة للبحث بها...',
     customJobBtn: 'إضافة مسمى مخصص',
-    geminiLabel: 'Google Gemini API Key (اختياري - لمطابقة الـ CV والرسائل)',
+    geminiLabel: 'مفتاح Gemini API (اختياري)',
     telegramTokenLabel: 'Telegram Bot Token',
-    telegramChatIdLabel: 'Telegram Chat ID (معرف شات تليجرام الخاص بك)',
-    scraperApiKeyLabel: 'ScraperAPI Key (اختياري - لمنع حظر Indeed)',
+    telegramChatIdLabel: 'معرف الشات Chat ID',
+    scraperApiKeyLabel: 'مفتاح ScraperAPI (اختياري)',
     githubTokenLabel: 'GitHub Personal Access Token (PAT)',
-    githubRepoLabel: 'اسم مستودع البوت الجديد',
-    experienceLabel: 'سنوات الخبرة المطلوبة',
+    githubRepoLabel: 'اسم مستودع GitHub',
+    experienceLabel: 'مستوى الخبرة',
     step5Title: '🎉 اكتمل الإعداد بنجاح!',
     step5Desc: 'تم إنشاء مساعد الوظائف الخاص بك وتفعيله على خوادم GitHub. جاري تشغيل أول دورة فحص للوظائف في الخلفية الآن.',
     countdownLabel: 'الفحص الأول يبدأ خلال:',
@@ -48,10 +48,10 @@ const TRANSLATIONS = {
     wizardTitle: 'Setup Personal Bot',
     step: 'Step',
     of: 'of',
-    jobTitlesLabel: 'Target Job Titles',
+    jobTitlesLabel: 'Job Titles',
     countriesLabel: 'Target Countries',
     jobTypesLabel: 'Job Type Required',
-    visaSponsorshipLabel: 'Visa Sponsorship Status',
+    visaSponsorshipLabel: 'Visa Sponsorship',
     nextBtn: 'Continue to Next Step',
     backBtn: 'Back',
     deployBtn: 'Start Activation & Deploy',
@@ -60,13 +60,13 @@ const TRANSLATIONS = {
     jobSearchPlaceholder: 'Search or add a custom job title...',
     countrySearchPlaceholder: 'Search for target countries...',
     customJobBtn: 'Add custom title',
-    geminiLabel: 'Google Gemini API Key (Optional - for CV matching & templates)',
+    geminiLabel: 'Gemini API Key (Optional)',
     telegramTokenLabel: 'Telegram Bot Token',
-    telegramChatIdLabel: 'Telegram Chat ID (Your Chat ID)',
-    scraperApiKeyLabel: 'ScraperAPI Key (Optional - Prevents Indeed blocks)',
+    telegramChatIdLabel: 'Telegram Chat ID',
+    scraperApiKeyLabel: 'ScraperAPI Key (Optional)',
     githubTokenLabel: 'GitHub Personal Access Token (PAT)',
-    githubRepoLabel: 'New Bot Repository Name',
-    experienceLabel: 'Target Years of Experience',
+    githubRepoLabel: 'Repository Name',
+    experienceLabel: 'Experience Level',
     step5Title: '🎉 Setup Completed Successfully!',
     step5Desc: 'Your personal job assistant has been created and deployed to GitHub Actions. We are booting up and running the first scan cycle in the background now.',
     countdownLabel: 'First scan runs in:',
@@ -412,13 +412,13 @@ export default function SetupWizard({
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto rounded-2xl border border-white/[0.06] bg-[#050b18]/80 backdrop-blur-xl p-8 shadow-2xl relative" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="w-full max-w-xl mx-auto rounded-2xl border border-white/[0.06] bg-[#050b18]/80 backdrop-blur-xl p-5 sm:p-6 shadow-2xl relative" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       
       {/* Background Glow - SparkGen brand Blue/Orange spotlights */}
       <div className="absolute top-0 right-1/2 translate-x-1/2 w-80 h-36 bg-gradient-to-r from-blue-500/10 via-orange-500/5 to-blue-500/5 blur-[60px] pointer-events-none -z-10" />
 
       {/* Steps Progress Header */}
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/[0.04]">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/[0.04]">
         <h2 className="text-lg font-bold tracking-tight text-white">
           {t.wizardTitle}
         </h2>

@@ -315,10 +315,10 @@ export default function Step3Credentials({
           onChange={(e) => setScraperApiKey(e.target.value)}
           className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
         />
-        <p className="mt-1.5 text-[10px] text-slate-500 leading-relaxed">
+        <p className="mt-1.5 text-[10px] text-slate-500 leading-relaxed font-sans">
           {language === 'ar' 
-            ? 'ينصح به بشدة لتجنب الحظر على Indeed/Google Jobs. بدون المفتاح، قد يفشل فحص بعض الوظائف ويرجع 0 نتائج.' 
-            : 'Highly recommended to avoid Indeed/Google Jobs blocks. Without a key, scans may fail and return 0 results.'}
+            ? 'مطلوب للبحث في Indeed. بدونه، سيتم فحص وظائف Google فقط.' 
+            : 'Required to scan Indeed. Without this, only Google Jobs will be queried.'}
         </p>
       </div>
 

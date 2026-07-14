@@ -18,6 +18,10 @@ It consists of two main parts:
 
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Active Telemetry Aggregator & Outcomes Reporter (July 2026):**
+    *   **Aggregate Match Scores & Missing Skills:** Updated `main.py` bot execution cycle to log average matching scores per target job title and compile lists of missing technical keywords in user CVs.
+    *   **Scraping Sources Tracking:** Records job posting providers (Indeed, Google Jobs, etc.) to evaluate source quality.
+    *   **Telemetry Ping API Transmission:** Transmits telemetry aggregates automatically to the server at the end of every scan cycle via a secure POST ping protected by the `SPARKJOBS_PING_SECRET` token.
 *   **Premium Layout Spacing & Responsive Grid Updates (July 2026):**
     *   **Unified Spacing & Padding:** Aligned page padding to `px-6 sm:px-8` (matching the nav bar's responsive widths) and increased vertical margins to `py-12 md:py-16` to clear the sticky header elegantly across all viewport widths.
     *   **Tightened Hierarchy:** Grouped breadcrumbs and title elements in a `.space-y-2` container to keep them visually unified rather than split apart by global column styles.

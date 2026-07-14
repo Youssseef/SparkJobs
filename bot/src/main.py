@@ -168,6 +168,11 @@ def run_scanner():
     print(f"Found {len(active_countries)} active locations out of {len(target_countries)} total locations.")
 
     scam_jobs_skipped = 0
+    total_cycle_jobs = 0
+    total_cycle_alerts = 0
+    all_missing_keywords = []
+    job_sources_count = {}
+    match_scores = []
 
     # Load candidate CV
     cv_text = get_cv_text(cv_version)
@@ -218,7 +223,12 @@ def run_scanner():
                     continue
 
                 new_jobs_count += 1
+                total_cycle_jobs += 1
                 tracker["jobs_evaluated_this_week"] += 1
+                
+                # Collect job source telemetry
+                source = job.get("source", "Unknown")
+                job_sources_count[source] = job_sources_count.get(source, 0) + 1
                 
                 # 2. Check Local Fraud Heuristics
                 fraud_result = analyze_job_for_fraud(job)
@@ -247,6 +257,11 @@ def run_scanner():
                     ai_result["risk_reason"] = ", ".join(fraud_result["reasons"])
                 
                 match_score = ai_result.get("match_score", 0)
+                if match_score > 0:
+                    match_scores.append(match_score)
+                
+                # Collect missing keywords telemetry
+                all_missing_keywords.extend(ai_result.get("missing_keywords", []))
                 
                 # 4. Score Threshold Check
                 if match_score >= min_score:
@@ -262,6 +277,7 @@ def run_scanner():
                     )
                     if success:
                         alerts_sent_count += 1
+                        total_cycle_alerts += 1
                         tracker["alerts_sent_this_week"] += 1
                         mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
                         time.sleep(random.uniform(1.0, 2.0))
@@ -274,6 +290,47 @@ def run_scanner():
     # Run Database cleanup
     cleanup_old_jobs(SEEN_JOBS_PATH)
     save_status_tracker(tracker)
+
+    # ─── Report Aggregated Telemetry Ping ───
+    try:
+        from collections import Counter
+        import requests
+        
+        # Sort and take top 10 missing keywords
+        top_kws = [kw for kw, _ in Counter(all_missing_keywords).most_common(10)]
+        
+        # Format top job sources
+        top_sources = [{"source": s, "count": c} for s, c in job_sources_count.items()]
+        
+        # Calculate average match score
+        avg_score = round(sum(match_scores) / len(match_scores), 2) if match_scores else 0
+        
+        # Read API URL from environment fallback, standard production is sparkgen.net
+        telemetry_url = os.environ.get("SPARKJOBS_TELEMETRY_URL", "https://sparkgen.net/api/jobs/telemetry/ping")
+        
+        payload = {
+            "telegram_chat_id": chat_id,
+            "jobs_evaluated": total_cycle_jobs,
+            "scams_detected": scam_jobs_skipped,
+            "alerts_sent": total_cycle_alerts,
+            "avg_match_score": avg_score,
+            "top_missing_kws": top_kws,
+            "top_job_sources": top_sources
+        }
+        ping_secret = os.environ.get("SPARKJOBS_PING_SECRET", "")
+        
+        req_res = requests.post(
+            telemetry_url,
+            json=payload,
+            headers={"x-ping-secret": ping_secret},
+            timeout=10
+        )
+        if req_res.status_code == 200:
+            print("Telemetry statistics reported successfully.")
+        else:
+            print(f"Telemetry report returned status code: {req_res.status_code}. Response: {req_res.text}")
+    except Exception as telemetry_err:
+        print(f"Failed to report telemetry (non-blocking): {telemetry_err}")
 
     # Send scam summary alert to Telegram if any were filtered
     if scam_jobs_skipped > 0:

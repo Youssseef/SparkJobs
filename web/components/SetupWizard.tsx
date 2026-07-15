@@ -32,7 +32,7 @@ const TRANSLATIONS = {
     customJobBtn: 'إضافة مسمى مخصص',
     geminiLabel: 'مفتاح Gemini API (اختياري)',
     telegramTokenLabel: 'Telegram Bot Token',
-    telegramChatIdLabel: 'معرف الشات Chat ID',
+    telegramChatIdLabel: 'معرف حسابك الشخصي (User ID)',
     scraperApiKeyLabel: 'مفتاح ScraperAPI (اختياري)',
     githubTokenLabel: 'GitHub Personal Access Token (PAT)',
     githubRepoLabel: 'اسم مستودع GitHub',
@@ -62,7 +62,7 @@ const TRANSLATIONS = {
     customJobBtn: 'Add custom title',
     geminiLabel: 'Gemini API Key (Optional)',
     telegramTokenLabel: 'Telegram Bot Token',
-    telegramChatIdLabel: 'Telegram Chat ID',
+    telegramChatIdLabel: 'Personal Telegram ID (User ID)',
     scraperApiKeyLabel: 'ScraperAPI Key (Optional)',
     githubTokenLabel: 'GitHub Personal Access Token (PAT)',
     githubRepoLabel: 'Repository Name',
@@ -94,9 +94,9 @@ const GUIDE_COMPONENTS = {
     ),
     chat: (
       <span>
-        1. اضغط على هذا الرابط: <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">معرفة الـ Chat ID الخاص بك</a>.<br />
+        1. اضغط على هذا الرابط: <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">معرفة معرفك الشخصي (User ID)</a>.<br />
         2. اضغط على زر <b>Start</b>.<br />
-        3. سيرد عليك البوت بمعرف حسابك (ID) فوراً، انسخه والزقه هنا.
+        3. انسخ الرقم الناتج (معرف حسابك الشخصي). <b>تنبيه:</b> تأكد من نسخ المعرف الشخصي الخاص بك، وليس معرف البوت!
       </span>
     ),
     proxy: (
@@ -130,9 +130,9 @@ const GUIDE_COMPONENTS = {
     ),
     chat: (
       <span>
-        1. Click this direct link: <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">Get Chat ID</a>.<br />
+        1. Click this direct link: <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">Get Your Personal ID</a>.<br />
         2. Press <b>Start</b>.<br />
-        3. Copy the ID number returned in the message and paste it here.
+        3. Copy the personal ID number returned. <b>Note:</b> Make sure you copy your own ID, not your bot's ID!
       </span>
     ),
     proxy: (

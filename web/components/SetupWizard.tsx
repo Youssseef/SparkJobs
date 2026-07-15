@@ -101,8 +101,8 @@ const GUIDE_COMPONENTS = {
     ),
     proxy: (
       <span>
-        1. اذهب لموقع <a href="https://www.scraperapi.com/" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">موقع ScraperAPI الرسمي</a> وسجل حساباً مجانياً مجرد بريد إلكتروني وكلمة مرور.<br />
-        2. ستجد الـ API Key الخاص بك مباشرة في لوحة التحكم، انسخه هنا (يعطيك 5000 طلب مجاني شهرياً لمنع حظر Indeed).
+        1. اذهب لموقع <a href="https://www.scraperapi.com/" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">موقع ScraperAPI الرسمي</a> وسجل حساباً مجانياً.<br />
+        2. انسخ الـ API Key من لوحة التحكم والزقه هنا. <b>تنبيه:</b> يعطيك الموقع 5000 طلب مجاني كفترة تجريبية لمدة 7 أيام. هذا المفتاح <b>اختياري</b>؛ إذا تركته فارغاً، سيتخطى البوت موقع Indeed ويستمر بفحص LinkedIn ومواقع التوظيف الأخرى بنجاح.
       </span>
     ),
     github: (
@@ -137,8 +137,8 @@ const GUIDE_COMPONENTS = {
     ),
     proxy: (
       <span>
-        1. Go to <a href="https://www.scraperapi.com/" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">ScraperAPI Portal</a> and register a free account.<br />
-        2. Copy your API Key from the dashboard (5,000 free requests per month).
+        1. Go to the <a href="https://www.scraperapi.com/" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline font-bold">ScraperAPI Portal</a> and register a free account.<br />
+        2. Copy your API Key and paste it here. <b>Note:</b> ScraperAPI offers 5,000 free requests for a 7-day trial period. This key is <b>optional</b>; you can leave it blank to skip Indeed scanning and only scan LinkedIn/Glassdoor.
       </span>
     ),
     github: (

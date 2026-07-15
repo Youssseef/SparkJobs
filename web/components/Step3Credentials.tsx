@@ -44,6 +44,117 @@ export default function Step3Credentials({
 
   const hasCredentials = tgToken.trim() !== '' && tgChatId.trim() !== '';
 
+  const handleTestGemini = async () => {
+    if (!geminiKey || geminiTestLoading) return;
+    setGeminiTestLoading(true);
+    setGeminiTestResult(null);
+    try {
+      let res = await fetch('/api/setup/test-gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gemini_key: geminiKey })
+      });
+
+      let isSuccess = false;
+      let errorMsg = '';
+
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        isSuccess = data.success;
+        errorMsg = data.error;
+      } else {
+        // Fallback: Perform direct browser-side validation to Google's Gemini API
+        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+        try {
+          const directRes = await fetch(directUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: 'ping' }] }]
+            })
+          });
+          if (directRes.ok) {
+            isSuccess = true;
+          } else {
+            const directData = await directRes.json().catch(() => ({}));
+            errorMsg = directData.error?.message || (language === 'ar' ? 'مفتاح غير صالح. تأكد من نسخه بشكل صحيح.' : 'Invalid key. Make sure you copied it correctly.');
+          }
+        } catch (directErr) {
+          errorMsg = language === 'ar'
+            ? 'فشل الاتصال بخادم Gemini. تحقق من جودة اتصالك بالإنترنت.'
+            : 'Failed to reach Gemini API. Please check your internet connection.';
+        }
+      }
+
+      if (isSuccess) {
+        setGeminiTestResult({ success: true, msg: language === 'ar' ? 'مفتاح Gemini صالح ومؤكد!' : 'Gemini Key is valid!' });
+      } else {
+        setGeminiTestResult({ success: false, msg: errorMsg || (language === 'ar' ? 'مفتاح غير صالح. تأكد من نسخه بشكل صحيح.' : 'Invalid key. Make sure you copied it correctly.') });
+      }
+    } catch (e: any) {
+      setGeminiTestResult({
+        success: false,
+        msg: language === 'ar'
+          ? 'خطأ في الشبكة. تأكد من اتصالك بالإنترنت وإعادة المحاولة.'
+          : 'Network error. Check your connection and try again.'
+      });
+    } finally {
+      setGeminiTestLoading(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    if (!tgToken || !tgChatId || testLoading) return;
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/test-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bot_token: tgToken.trim(),
+          chat_id: tgChatId.trim(),
+          language
+        })
+      });
+      if (res.ok) {
+        setTestResult({ success: true, msg: language === 'ar' ? 'تم إرسال رسالة تجريبية بنجاح! تفقد تطبيق تليجرام.' : 'Test message sent successfully! Check Telegram.' });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        const rawDesc = data.error || '';
+        let friendlyError = '';
+        
+        if (res.status === 401 || rawDesc.toLowerCase().includes('unauthorized')) {
+          friendlyError = language === 'ar'
+            ? 'الـ Bot Token غير صحيح. تأكد من نسخه بدقة من BotFather.'
+            : 'The Bot Token is invalid. Make sure to copy it correctly from BotFather.';
+        } else if (rawDesc.toLowerCase().includes('chat not found')) {
+          friendlyError = language === 'ar'
+            ? 'لم يتم العثور على الـ Chat ID. تأكد من إدخال الرقم الصحيح وإرسال رسالة /start للبوت أولاً.'
+            : 'Chat ID not found. Ensure the ID is correct and you have started the bot with /start first.';
+        } else if (rawDesc.toLowerCase().includes('blocked')) {
+          friendlyError = language === 'ar'
+            ? 'البوت محظور من قبلك. يرجى إلغاء حظر البوت على تليجرام والمحاولة مجدداً.'
+            : 'The bot is blocked. Please unblock the bot on Telegram and try again.';
+        } else {
+          friendlyError = rawDesc || (language === 'ar' ? 'فشل إرسال رسالة الاختبار. تحقق من صحة البيانات.' : 'Failed to send test message. Check your credentials.');
+        }
+        
+        setTestResult({ success: false, msg: friendlyError });
+      }
+    } catch (e: any) {
+      setTestResult({
+        success: false,
+        msg: language === 'ar'
+          ? 'خطأ في الشبكة. تعذّر الاتصال بخوادم تليجرام.'
+          : 'Network error. Could not connect to Telegram servers.'
+      });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-5 text-start">
       
@@ -68,71 +179,19 @@ export default function Step3Credentials({
           type="password"
           value={geminiKey}
           onChange={(e) => setGeminiKey(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleTestGemini();
+            }
+          }}
           placeholder="AIStudio key..."
           className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
         />
         <div className="pt-2">
           <button
             type="button"
-            onClick={async () => {
-              if (!geminiKey) return;
-              setGeminiTestLoading(true);
-              setGeminiTestResult(null);
-              try {
-                let res = await fetch('/api/setup/test-gemini', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ gemini_key: geminiKey })
-                });
-
-                let isSuccess = false;
-                let errorMsg = '';
-
-                const contentType = res.headers.get('content-type') || '';
-                if (res.ok && contentType.includes('application/json')) {
-                  const data = await res.json();
-                  isSuccess = data.success;
-                  errorMsg = data.error;
-                } else {
-                  // Fallback: Perform direct browser-side validation to Google's Gemini API (useful in local dev without Vercel CLI)
-                  const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-                  try {
-                    const directRes = await fetch(directUrl, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        contents: [{ parts: [{ text: 'ping' }] }]
-                      })
-                    });
-                    if (directRes.ok) {
-                      isSuccess = true;
-                    } else {
-                      const directData = await directRes.json().catch(() => ({}));
-                      errorMsg = directData.error?.message || (language === 'ar' ? 'مفتاح غير صالح. تأكد من نسخه بشكل صحيح.' : 'Invalid key. Make sure you copied it correctly.');
-                    }
-                  } catch (directErr) {
-                    errorMsg = language === 'ar'
-                      ? 'فشل الاتصال بخادم Gemini. تحقق من جودة اتصالك بالإنترنت.'
-                      : 'Failed to reach Gemini API. Please check your internet connection.';
-                  }
-                }
-
-                if (isSuccess) {
-                  setGeminiTestResult({ success: true, msg: language === 'ar' ? 'مفتاح Gemini صالح ومؤكد!' : 'Gemini Key is valid!' });
-                } else {
-                  setGeminiTestResult({ success: false, msg: errorMsg || (language === 'ar' ? 'مفتاح غير صالح. تأكد من نسخه بشكل صحيح.' : 'Invalid key. Make sure you copied it correctly.') });
-                }
-              } catch (e: any) {
-                setGeminiTestResult({
-                  success: false,
-                  msg: language === 'ar'
-                    ? 'خطأ في الشبكة. تأكد من اتصالك بالإنترنت وإعادة المحاولة.'
-                    : 'Network error. Check your connection and try again.'
-                });
-              } finally {
-                setGeminiTestLoading(false);
-              }
-            }}
+            onClick={handleTestGemini}
             disabled={geminiTestLoading || !geminiKey}
             className="w-full h-9 rounded-md border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-xs font-semibold text-blue-400 transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:hover:bg-blue-500/10 disabled:cursor-not-allowed"
           >
@@ -180,6 +239,12 @@ export default function Step3Credentials({
           type="password"
           value={tgToken}
           onChange={(e) => setTgToken(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleTestTelegram();
+            }
+          }}
           placeholder="123456:ABC-DEF..."
           className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
         />
@@ -206,6 +271,12 @@ export default function Step3Credentials({
           type="text"
           value={tgChatId}
           onChange={(e) => setTgChatId(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleTestTelegram();
+            }
+          }}
           placeholder="987654321"
           className="w-full h-10 px-4 rounded-md border border-white/[0.08] bg-[#030712] text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500 outline-none"
         />
@@ -214,56 +285,7 @@ export default function Step3Credentials({
         <div className="pt-2">
           <button
             type="button"
-            onClick={async () => {
-              if (!tgToken || !tgChatId) return;
-              setTestLoading(true);
-              setTestResult(null);
-              try {
-                const res = await fetch('/api/test-alert', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    bot_token: tgToken.trim(),
-                    chat_id: tgChatId.trim(),
-                    language
-                  })
-                });
-                if (res.ok) {
-                  setTestResult({ success: true, msg: language === 'ar' ? 'تم إرسال رسالة تجريبية بنجاح! تفقد تطبيق تليجرام.' : 'Test message sent successfully! Check Telegram.' });
-                } else {
-                  const data = await res.json().catch(() => ({}));
-                  const rawDesc = data.error || '';
-                  let friendlyError = '';
-                  
-                  if (res.status === 401 || rawDesc.toLowerCase().includes('unauthorized')) {
-                    friendlyError = language === 'ar'
-                      ? 'الـ Bot Token غير صحيح. تأكد من نسخه بدقة من BotFather.'
-                      : 'The Bot Token is invalid. Make sure to copy it correctly from BotFather.';
-                  } else if (rawDesc.toLowerCase().includes('chat not found')) {
-                    friendlyError = language === 'ar'
-                      ? 'لم يتم العثور على الـ Chat ID. تأكد من إدخال الرقم الصحيح وإرسال رسالة /start للبوت أولاً.'
-                      : 'Chat ID not found. Ensure the ID is correct and you have started the bot with /start first.';
-                  } else if (rawDesc.toLowerCase().includes('blocked')) {
-                    friendlyError = language === 'ar'
-                      ? 'البوت محظور من قبلك. يرجى إلغاء حظر البوت على تليجرام والمحاولة مجدداً.'
-                      : 'The bot is blocked. Please unblock the bot on Telegram and try again.';
-                  } else {
-                    friendlyError = rawDesc || (language === 'ar' ? 'فشل إرسال رسالة الاختبار. تحقق من صحة البيانات.' : 'Failed to send test message. Check your credentials.');
-                  }
-                  
-                  setTestResult({ success: false, msg: friendlyError });
-                }
-              } catch (e: any) {
-                setTestResult({
-                  success: false,
-                  msg: language === 'ar'
-                    ? 'خطأ في الشبكة. تعذّر الاتصال بخوادم تليجرام.'
-                    : 'Network error. Could not connect to Telegram servers.'
-                });
-              } finally {
-                setTestLoading(false);
-              }
-            }}
+            onClick={handleTestTelegram}
             disabled={testLoading || !tgToken || !tgChatId}
             className="w-full h-9 rounded-md border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-xs font-semibold text-blue-400 transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:hover:bg-blue-500/10 disabled:cursor-not-allowed"
           >

@@ -223,6 +223,18 @@ export default function Step1Profile({
                   placeholder={t.jobSearchPlaceholder}
                   value={jobSearch}
                   onChange={(e) => setJobSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (filteredJobTitles.length > 0) {
+                        const title = filteredJobTitles[0];
+                        setSelectedJobTitles([...selectedJobTitles, title]);
+                        setJobSearch('');
+                      } else {
+                        handleAddCustomJob();
+                      }
+                    }
+                  }}
                   className="w-full h-8 pr-9 pl-3 rounded bg-[#030712] border border-white/[0.08] text-xs text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -360,6 +372,17 @@ export default function Step1Profile({
                     placeholder={t.countrySearchPlaceholder}
                     value={countrySearch}
                     onChange={(e) => setCountrySearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (filteredCountries.length > 0) {
+                          const country = filteredCountries[0];
+                          handleAddCountry(country.id);
+                          setCountryDropdownOpen(false);
+                          setCountrySearch('');
+                        }
+                      }
+                    }}
                     className="w-full h-8 pr-9 pl-3 rounded bg-[#030712] border border-white/[0.08] text-xs text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none"
                   />
                 </div>

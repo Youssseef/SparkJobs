@@ -50,6 +50,16 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     # 3. Format outreach message
     outreach = ai_analysis.get("outreach_message", "")
     
+    # Pre-build sections to avoid backslashes inside f-string expression braces (Python <3.12 compatibility)
+    if language == "ar":
+        pros_section = f"\n<b>✅ نقاط القوة:</b>\n{pros}" if pros else ""
+        cons_section = f"\n<b>⚠️ فجوات:</b>\n{cons}" if cons else ""
+        missing_section = f"\n<b>🔍 كلمات مفتاحية ناقصة:</b> {missing}" if missing else ""
+    else:
+        pros_section = f"\n<b>✅ Strengths:</b>\n{pros}" if pros else ""
+        cons_section = f"\n<b>⚠️ Gaps:</b>\n{cons}" if cons else ""
+        missing_section = f"\n<b>🔍 Missing Keywords:</b> {missing}" if missing else ""
+
     # 4. Construct the HTML message body
     if language == "ar":
         message = f"""<b>وظيفة جديدة | {escape_html(profile_name)}</b>
@@ -63,10 +73,7 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
  
 الراتب التقديري: {escape_html(estimated_salary)}
  
-توافق الـ CV: {match_score}%
-{"<b>✅ نقاط القوة:</b>\n" + pros if pros else ""}
-{"<b>⚠️ فجوات:</b>\n" + cons if cons else ""}
-{"<b>🔍 كلمات مفتاحية ناقصة:</b> " + missing if missing else ""}
+توافق الـ CV: {match_score}%{pros_section}{cons_section}{missing_section}
  
 رسالة التواصل مع الـ Recruiter:
 <code>{escape_html(outreach)}</code>
@@ -86,10 +93,7 @@ Safety Rating: {safety_badge}
  
 Est. Salary: {escape_html(estimated_salary)}
  
-CV Match Score: {match_score}%
-{"<b>✅ Strengths:</b>\n" + pros if pros else ""}
-{"<b>⚠️ Gaps:</b>\n" + cons if cons else ""}
-{"<b>🔍 Missing Keywords:</b> " + missing if missing else ""}
+CV Match Score: {match_score}%{pros_section}{cons_section}{missing_section}
  
 Recruiter Outreach Message:
 <code>{escape_html(outreach)}</code>

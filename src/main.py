@@ -108,10 +108,10 @@ def run_scanner():
         print("Bot is currently paused. Exiting scan cycle.")
         return
         
-    gemini_key = config.get("gemini_api_key", "")
-    bot_token = config.get("telegram_bot_token", "")
-    chat_id = config.get("telegram_chat_id", "")
-    scraperapi_key = config.get("scraperapi_key", "")
+    gemini_key = config.get("gemini_api_key", "") or os.environ.get("GEMINI_API_KEY", "")
+    bot_token = config.get("telegram_bot_token", "") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = config.get("telegram_chat_id", "") or os.environ.get("TELEGRAM_CHAT_ID", "")
+    scraperapi_key = config.get("scraperapi_key", "") or os.environ.get("SCRAPERAPI_KEY", "")
     profiles = config.get("profiles", [])
     language = config.get("language", "ar")
     

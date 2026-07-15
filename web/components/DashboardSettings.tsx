@@ -321,7 +321,7 @@ export default function DashboardSettings({
                       onChange={() => toggleCountryActive(c.country)}
                       className="sr-only peer"
                     />
-                    <div className="w-8 h-4.5 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] peer-checked:after:right-[14px] after:bg-slate-400 peer-checked:after:bg-blue-400 after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08]" />
+                    <div className="w-8 h-4.5 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 peer-checked:after:bg-blue-400 after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08]" />
                   </label>
                 </div>
               </div>
@@ -345,7 +345,7 @@ export default function DashboardSettings({
                         onChange={(e) => updateCountryRule(c.country, { remote_only: e.target.checked })}
                         className="sr-only peer"
                       />
-                      <div className="w-7 h-4 bg-white/[0.06] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] peer-checked:after:right-[12px] after:bg-slate-500 peer-checked:after:bg-blue-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08] disabled:opacity-40" />
+                      <div className="w-7 h-4 bg-white/[0.06] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-500 peer-checked:after:bg-blue-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08] disabled:opacity-40" />
                     </label>
                   </div>
 
@@ -364,7 +364,7 @@ export default function DashboardSettings({
                           onChange={(e) => updateCountryRule(c.country, { requires_visa: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-7 h-4 bg-white/[0.06] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] peer-checked:after:right-[12px] after:bg-slate-500 peer-checked:after:bg-blue-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08] disabled:opacity-40" />
+                        <div className="w-7 h-4 bg-white/[0.06] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-500 peer-checked:after:bg-blue-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08] disabled:opacity-40" />
                       </label>
                     </div>
                   )}

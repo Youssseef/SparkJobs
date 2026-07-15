@@ -219,22 +219,20 @@ export default function Step3Credentials({
               setTestLoading(true);
               setTestResult(null);
               try {
-                const welcomeMsg = language === 'ar'
-                  ? `🔍 تم اختبار الاتصال بنجاح! البوت جاهز الآن لإرسال التنبيهات الوظيفية.`
-                  : `🔍 Connection test successful! Your bot is ready to send alerts.`;
-                const res = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+                const res = await fetch('/api/test-alert', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    chat_id: tgChatId,
-                    text: welcomeMsg
+                    bot_token: tgToken.trim(),
+                    chat_id: tgChatId.trim(),
+                    language
                   })
                 });
                 if (res.ok) {
                   setTestResult({ success: true, msg: language === 'ar' ? 'تم إرسال رسالة تجريبية بنجاح! تفقد تطبيق تليجرام.' : 'Test message sent successfully! Check Telegram.' });
                 } else {
-                  const data = await res.json();
-                  const rawDesc = data.description || '';
+                  const data = await res.json().catch(() => ({}));
+                  const rawDesc = data.error || '';
                   let friendlyError = '';
                   
                   if (res.status === 401 || rawDesc.toLowerCase().includes('unauthorized')) {
@@ -250,7 +248,7 @@ export default function Step3Credentials({
                       ? 'البوت محظور من قبلك. يرجى إلغاء حظر البوت على تليجرام والمحاولة مجدداً.'
                       : 'The bot is blocked. Please unblock the bot on Telegram and try again.';
                   } else {
-                    friendlyError = data.description || (language === 'ar' ? 'فشل إرسال رسالة الاختبار. تحقق من صحة البيانات.' : 'Failed to send test message. Check your credentials.');
+                    friendlyError = rawDesc || (language === 'ar' ? 'فشل إرسال رسالة الاختبار. تحقق من صحة البيانات.' : 'Failed to send test message. Check your credentials.');
                   }
                   
                   setTestResult({ success: false, msg: friendlyError });

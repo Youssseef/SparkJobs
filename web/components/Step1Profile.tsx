@@ -440,7 +440,7 @@ export default function Step1Profile({
                             onChange={(e) => handleUpdateCountryRule(tc.country, { remote_only: e.target.checked })}
                             className="sr-only peer"
                           />
-                          <div className="w-9 h-5 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] peer-checked:after:right-[16px] after:bg-slate-400 peer-checked:after:bg-blue-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08]" />
+                          <div className="w-9 h-5 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 peer-checked:after:bg-blue-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08]" />
                         </label>
                       </div>
 
@@ -459,7 +459,7 @@ export default function Step1Profile({
                               onChange={(e) => handleUpdateCountryRule(tc.country, { requires_visa: e.target.checked })}
                               className="sr-only peer"
                             />
-                            <div className="w-9 h-5 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] peer-checked:after:right-[16px] after:bg-slate-400 peer-checked:after:bg-blue-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08] disabled:opacity-30" />
+                            <div className="w-9 h-5 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 peer-checked:after:bg-blue-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500/25 border border-white/[0.08] disabled:opacity-30" />
                           </label>
                         </div>
                       )}

@@ -97,6 +97,44 @@ def get_cv_text(cv_version: str) -> str:
     print(f"Warning: CV file not found for '{cv_version}' in {CVS_DIR}")
     return ""
 
+def is_title_relevant(job_title: str, target_titles: list) -> bool:
+    """
+    Performs a case-insensitive keyword overlap check to ensure the job title
+    is semantically related to the configured target titles.
+    """
+    if not target_titles:
+        return True
+    
+    import re
+    # Standardize job title (alphanumeric and spaces)
+    job_words = set(re.findall(r'\b\w+\b', job_title.lower()))
+    
+    # Common filler words to ignore in match overlap checks
+    fillers = {
+        "senior", "junior", "lead", "staff", "principal", "remote", "hybrid", "onsite", 
+        "jobs", "job", "developer", "engineer", "designer", "manager", "intern", "associate", 
+        "middle", "mid", "expert", "specialist", "professional", "director", "vp", "head"
+    }
+    
+    job_keywords = job_words - fillers
+    if not job_keywords:
+        job_keywords = job_words
+        
+    for target in target_titles:
+        target_lower = target.lower()
+        if target_lower in job_title.lower():
+            return True
+            
+        target_words = set(re.findall(r'\b\w+\b', target_lower))
+        target_keywords = target_words - fillers
+        if not target_keywords:
+            target_keywords = target_words
+            
+        if job_keywords.intersection(target_keywords):
+            return True
+            
+    return False
+
 def run_scanner():
     """
     Orchestrator for the periodic job scan.
@@ -199,90 +237,100 @@ def run_scanner():
             alerts_sent_count = 0
             
             for job in jobs:
-                job_id = job["id"]
-                
-                # 1. Check Deduplication
-                if is_job_seen(SEEN_JOBS_PATH, job_id):
-                    continue
-                
-                # Check exclusion keywords (case-insensitive)
-                should_exclude = False
-                if exclude_keywords:
-                    job_title_lower = job.get("title", "").lower()
-                    job_desc_lower = job.get("description", "").lower()
-                    job_company_lower = job.get("company", "").lower()
-                    for kw in exclude_keywords:
-                        kw_lower = kw.lower()
-                        if kw_lower in job_title_lower or kw_lower in job_desc_lower or kw_lower in job_company_lower:
-                            should_exclude = True
-                            break
-                
-                if should_exclude:
-                    print(f"Skipping job matching exclusion filter: {job['title']} at {job['company']}")
-                    mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
-                    continue
-
-                new_jobs_count += 1
-                total_cycle_jobs += 1
-                tracker["jobs_evaluated_this_week"] += 1
-                
-                # Collect job source telemetry
-                source = job.get("source", "Unknown")
-                job_sources_count[source] = job_sources_count.get(source, 0) + 1
-                
-                # 2. Check Local Fraud Heuristics
-                fraud_result = analyze_job_for_fraud(job)
-                
-                # If high risk scam, we log it and skip to protect user
-                if fraud_result["risk_level"] == "High":
-                    print(f"Skipping High Risk/Scam job: {job['title']} at {job['company']}")
-                    mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
-                    scam_jobs_skipped += 1
-                    continue
-                
-                # 3. AI Semantic Match & Custom Outreach Generation
-                ai_result = analyze_job_match(
-                    cv_text=cv_text,
-                    job_title=job["title"],
-                    job_desc=job["description"],
-                    api_key=gemini_key,
-                    min_match_score=min_score,
-                    cover_letter=cover_letter,
-                    years_exp=years_exp
-                )
-                
-                # Merge local fraud alerts with AI risk comments
-                if fraud_result["is_suspicious"]:
-                    ai_result["risk_level"] = fraud_result["risk_level"]
-                    ai_result["risk_reason"] = ", ".join(fraud_result["reasons"])
-                
-                match_score = ai_result.get("match_score", 0)
-                if match_score > 0:
-                    match_scores.append(match_score)
-                
-                # Collect missing keywords telemetry
-                all_missing_keywords.extend(ai_result.get("missing_keywords", []))
-                
-                # 4. Score Threshold Check
-                if match_score >= min_score:
-                    # Send alert to Telegram
-                    alert_label = f"{title} ({country_name})"
-                    success = send_telegram_alert(
-                        bot_token=bot_token,
-                        chat_id=chat_id,
-                        job=job,
-                        ai_analysis=ai_result,
-                        profile_name=alert_label,
-                        language=language
-                    )
-                    if success:
-                        alerts_sent_count += 1
-                        total_cycle_alerts += 1
-                        tracker["alerts_sent_this_week"] += 1
+                try:
+                    job_id = job["id"]
+                    
+                    # 1. Check Deduplication
+                    if is_job_seen(SEEN_JOBS_PATH, job_id):
+                        continue
+                    
+                    # Check exclusion keywords (case-insensitive)
+                    should_exclude = False
+                    if exclude_keywords:
+                        job_title_lower = job.get("title", "").lower()
+                        job_desc_lower = job.get("description", "").lower()
+                        job_company_lower = job.get("company", "").lower()
+                        for kw in exclude_keywords:
+                            kw_lower = kw.lower()
+                            if kw_lower in job_title_lower or kw_lower in job_desc_lower or kw_lower in job_company_lower:
+                                should_exclude = True
+                                break
+                    
+                    if should_exclude:
+                        print(f"Skipping job matching exclusion filter: {job['title']} at {job['company']}")
                         mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
-                        time.sleep(random.uniform(1.0, 2.0))
-                else:
-                    mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
+                        continue
+
+                    # Strict Title Relevance check (keyword overlap) to prevent wrong field alerts
+                    if not is_title_relevant(job.get("title", ""), job_titles):
+                        print(f"Skipping off-field job title: {job['title']} at {job['company']} (not matching targets: {job_titles})")
+                        mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
+                        continue
+
+                    new_jobs_count += 1
+                    total_cycle_jobs += 1
+                    tracker["jobs_evaluated_this_week"] += 1
+                    
+                    # Collect job source telemetry
+                    source = job.get("source", "Unknown")
+                    job_sources_count[source] = job_sources_count.get(source, 0) + 1
+                    
+                    # 2. Check Local Fraud Heuristics
+                    fraud_result = analyze_job_for_fraud(job)
+                    
+                    # If high risk scam, we log it and skip to protect user
+                    if fraud_result["risk_level"] == "High":
+                        print(f"Skipping High Risk/Scam job: {job['title']} at {job['company']}")
+                        mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
+                        scam_jobs_skipped += 1
+                        continue
+                    
+                    # 3. AI Semantic Match & Custom Outreach Generation
+                    ai_result = analyze_job_match(
+                        cv_text=cv_text,
+                        job_title=job["title"],
+                        job_desc=job["description"],
+                        api_key=gemini_key,
+                        min_match_score=min_score,
+                        cover_letter=cover_letter,
+                        years_exp=years_exp
+                    )
+                    
+                    # Merge local fraud alerts with AI risk comments
+                    if fraud_result["is_suspicious"]:
+                        ai_result["risk_level"] = fraud_result["risk_level"]
+                        ai_result["risk_reason"] = ", ".join(fraud_result["reasons"])
+                    
+                    match_score = ai_result.get("match_score", 0)
+                    if match_score > 0:
+                        match_scores.append(match_score)
+                    
+                    # Collect missing keywords telemetry
+                    all_missing_keywords.extend(ai_result.get("missing_keywords", []))
+                    
+                    # 4. Score Threshold Check
+                    if match_score >= min_score:
+                        # Send alert to Telegram
+                        alert_label = f"{title} ({country_name})"
+                        success = send_telegram_alert(
+                            bot_token=bot_token,
+                            chat_id=chat_id,
+                            job=job,
+                            ai_analysis=ai_result,
+                            profile_name=alert_label,
+                            language=language
+                        )
+                        if success:
+                            alerts_sent_count += 1
+                            total_cycle_alerts += 1
+                            tracker["alerts_sent_this_week"] += 1
+                            mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
+                            time.sleep(random.uniform(1.0, 2.0))
+                    else:
+                        mark_job_as_seen(SEEN_JOBS_PATH, job_id, job["title"], job["company"])
+                except Exception as job_err:
+                    print(f"Error processing job '{job.get('title', 'Unknown')}' at '{job.get('company', 'Unknown')}': {job_err}")
+                    continue
 
             print(f"Scrape completed: {new_jobs_count} new postings evaluated. {alerts_sent_count} alerts sent.")
             time.sleep(random.uniform(2.0, 4.0))

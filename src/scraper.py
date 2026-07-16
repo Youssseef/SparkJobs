@@ -174,8 +174,26 @@ def scrape_weworkremotely(search_term: str) -> list:
     jobs_list = []
     try:
         print(f"Scraping We Work Remotely for '{search_term}'...")
-        # WWR feeds are grouped by category, but we can search using their public search feed
-        url = f"https://weworkremotely.com/categories/remote-programming-jobs.rss"
+        
+        # Dynamically map search term to WWR category RSS feed
+        category = "remote-programming-jobs" # default
+        st_lower = search_term.lower()
+        if any(kw in st_lower for kw in ["design", "ux", "ui", "creative", "artist", "illustrator"]):
+            category = "remote-design-jobs"
+        elif any(kw in st_lower for kw in ["product", "project", "owner", "scrum", "manager"]):
+            category = "remote-product-jobs"
+        elif any(kw in st_lower for kw in ["support", "customer", "success", "help"]):
+            category = "remote-customer-support-jobs"
+        elif any(kw in st_lower for kw in ["sales", "marketing", "growth", "seo", "ads"]):
+            category = "remote-sales-and-marketing-jobs"
+        elif any(kw in st_lower for kw in ["writer", "copy", "content"]):
+            category = "remote-copywriting-jobs"
+        elif any(kw in st_lower for kw in ["devops", "sysadmin", "sre", "cloud", "infrastructure"]):
+            category = "remote-devops-sysadmin-jobs"
+        elif any(kw in st_lower for kw in ["business", "exec", "ceo", "operations", "finance", "legal"]):
+            category = "remote-business-exec-management-jobs"
+            
+        url = f"https://weworkremotely.com/categories/{category}.rss"
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:

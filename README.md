@@ -41,6 +41,14 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 *   **New Google GenAI SDK Migration:** Migrated the bot from the legacy `google-generativeai` package to the new `google.genai` SDK for future-proof API compatibility.
 *   **Gemini Model Cascade Fallback:** Configured a resilient AI matching pipeline starting with `gemini-2.5-flash` as primary, and automatically cascading to `gemini-2.5-flash-lite` and `gemini-3.1-flash-lite` in case of rate limits or model downtime.
 *   **Binary CV Parsing (.pdf & .docx):** Replaced manual plain text variables with support for binary file uploads. Features a pure-Python custom DOCX parser utilizing python's built-in `zipfile` and `xml.etree.ElementTree` namespaces to extract clean text without bloating the action runner's dependencies.
+*   **Settings Save & Secrets Protection Guard (July 2026):**
+    *   **Partial Secrets Update Safety**: Configured `/setup/write-secrets` API to only update secrets that have explicitly non-empty values in the request payload. Empty values are ignored, preventing settings updates from silently overwriting active GitHub Actions secrets with blank values.
+    *   **Secret Status Verification**: Added `/setup/list-secrets` backend API to verify the presence of active keys in GitHub Secrets. The frontend Settings dashboard queries this on mount, displaying a secure placeholder and mask (`•••••••• (Saved in GitHub Secrets)`) to communicate key status while keeping the inputs editable without risks.
+*   **Resilient Job Scraper & Field Filtering (July 2026):**
+    *   **Dynamic RSS Category Routing**: Replaced hardcoded Programming category feeds on We Work Remotely with dynamic category lookup based on search term keywords (e.g. routing Design category for Product Designers).
+    *   **Pre-AI Title Relevance Filter**: Added keyword overlap checks (`is_title_relevant`) to discard off-field scraped jobs instantly before running expensive AI matches, protecting Gemini key usage quotas and preventing off-field job alerts.
+    *   **Job Scraper Exception Isolation**: Wrapped the job processing loop in a `try-except` block to ensure any individual job processing or API call failures do not crash the entire scheduled scan run.
+    *   **Telegram Webhook Status Path Correction**: Fixed incorrect path reference (`bot/data/status_tracker.json` -> `data/status_tracker.json`) in the Telegram webhook receiver command handler for `/status`.
 
 
 ## 🌟 Premium Features & Capabilities

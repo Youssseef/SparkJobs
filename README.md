@@ -10,14 +10,19 @@
 
 SparkJobs is an automated personal assistant designed to query local and international developer job boards (Indeed, Google Jobs) concurrently, score job descriptions against your CV using **Google Gemini AI**, filter out duplicate or fake postings, and deliver clean, structured summaries directly to your Telegram channel.
 
-It consists of two main parts:
-1. **`web/`**: A React + Tailwind CSS client portal integrated into the SparkGen website. It features a bilingual setup wizard to easily initialize the bot, generate a repository on your behalf, write configurations, and manage active searches.
-2. **`bot/`**: A Python-based scraping and AI classification bot designed to be hosted 100% free on **GitHub Actions** as a cron schedule with no server hosting costs.
+It is designed to run 100% free on **GitHub Actions** as a cron schedule with no server hosting compute costs. The bot is managed and configured directly from the **SparkGen Admin Dashboard** using a bilingual setup wizard and control panel.
 
 ---
 
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **GitHub Action Dispatch, Security Hardening & CSP Proxying (July 2026):**
+    *   **Credential Sanitization in config.json**: Strips `gemini_api_key`, `telegram_bot_token`, and `scraperapi_key` plain-text variables from committed config files to satisfy GitGuardian security scanners.
+    *   **GitHub Action Secrets fallback**: Enabled `main.py` to securely read credentials from GitHub Actions secrets (injected as env variables in `scan.yml`) with fallback support.
+    *   **Master/Main Branch Fallback**: Setup manual action dispatch logic with master fallback support to support repositories regardless of their default branch name.
+    *   **Automatic Repository Reuse**: Configured repository creation route to automatically check and reuse existing user repositories on name collisions instead of failing.
+    *   **Server-Side API Proxying**: Redirected external browser API calls (GitHub repository files and Telegram getMe bot lookups) through backend proxy endpoints to satisfy client-side browser CSP `connect-src` whitelist checks.
+    *   **Logger Database Write Guard**: Configured client-side logging to skip database persistence for guest/unauthenticated sessions, preventing 403 DB forbidden errors.
 *   **Active Telemetry Aggregator & Outcomes Reporter (July 2026):**
     *   **Aggregate Match Scores & Missing Skills:** Updated `main.py` bot execution cycle to log average matching scores per target job title and compile lists of missing technical keywords in user CVs.
     *   **Scraping Sources Tracking:** Records job posting providers (Indeed, Google Jobs, etc.) to evaluate source quality.
@@ -32,7 +37,7 @@ It consists of two main parts:
     *   **UX Writing Simplification & Icon-Only CTA:** Shortened labels, placeholders, and descriptions across all 5 wizard steps (e.g. `Target Years of Experience` -> `Experience Level`, `Automatic Scan Frequency` -> `Scan Frequency`, `Requires Visa Sponsorship` -> `Visa Sponsorship`). Replaced the text-heavy `+ Add Country` button with a clean `w-8 h-8 rounded-lg` square icon-only button to improve column alignment.
     *   **Country Card Grid Shift:** Shifted internal country card controls grid to stacked layout (`grid-cols-1`) for tablet and mobile sizes (under `lg:grid-cols-2` / 1024px) to prevent toggle-switch overlaps.
 *   **State Persistence & Ephemeral Storage Fix:** The GitHub Actions workflow (`scan.yml`) now commits and pushes both `seen_jobs.json` (deduplication database) and `status_tracker.json` (dashboard stats) back to the user's private repository after every scan. This ensures that dashboard metrics correctly accumulate over time instead of resetting on ephemeral runner shutdowns.
-*   **Security Isolation & Dev Environment Protection:** Local testing files (like `bot/test_live_alert.py`) are configured to load keys securely from environment variables (`os.environ.get`) instead of hardcoded strings, and are permanently ignored via `.gitignore` to prevent accidental credential leaks.
+*   **Security Isolation & Dev Environment Protection:** Local testing files (like `test_live_alert.py`) are configured to load keys securely from environment variables (`os.environ.get`) instead of hardcoded strings, and are permanently ignored via `.gitignore` to prevent accidental credential leaks.
 *   **New Google GenAI SDK Migration:** Migrated the bot from the legacy `google-generativeai` package to the new `google.genai` SDK for future-proof API compatibility.
 *   **Gemini Model Cascade Fallback:** Configured a resilient AI matching pipeline starting with `gemini-2.5-flash` as primary, and automatically cascading to `gemini-2.5-flash-lite` and `gemini-3.1-flash-lite` in case of rate limits or model downtime.
 *   **Binary CV Parsing (.pdf & .docx):** Replaced manual plain text variables with support for binary file uploads. Features a pure-Python custom DOCX parser utilizing python's built-in `zipfile` and `xml.etree.ElementTree` namespaces to extract clean text without bloating the action runner's dependencies.
@@ -76,14 +81,17 @@ It consists of two main parts:
 
 ```text
 sparkjobs/
-├── bot/                # Python Scraper and AI Matcher Bot code
-│   ├── data/           # Config JSONs, locally loaded CV text
-│   ├── src/            # Bot source scripts (scrapers, matchers, alerts)
-│   └── requirements.txt
-├── web/                # Next.js local web manager client
-│   ├── components/     # Setup Wizard, Upload Panel, and Dashboard
-│   ├── pages/          # Landing pages and setup API routers
-│   └── tailwind.config.js
+├── .github/workflows/
+│   └── scan.yml        # GitHub Actions serverless cron runner configuration
+├── data/               # Local folder containing active config/CV/seen logs
+│   ├── config.json
+│   └── status_tracker.json
+├── src/                # Python scraper, matcher, and alert bot scripts
+│   ├── ai_matcher.py
+│   ├── main.py
+│   ├── scraper.py
+│   └── telegram_bot.py
+├── requirements.txt    # Python dependencies manifest
 └── README.md           # Master documentation (this file)
 ```
 

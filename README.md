@@ -19,6 +19,7 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 *   **Indeed URL Resolving & Relevance Keywords (July 2026):**
     *   **Direct Indeed URLs**: Reconstructed clean Indeed URLs (`https://www.indeed.com/viewjob?jk={id}`) inside `scraper.py` using JobSpy's unique keys to prevent redirected or expired links.
     *   **Discipline Match Filters**: Removed generic domain nouns (`designer`, `developer`, `engineer`, `manager`) from title pre-filtering `fillers` list in `main.py` so that keyword overlap logic checks actual disciplines correctly.
+    *   **Template Update Alarms**: Built a non-blocking update checking mechanism in `main.py` that hashes the local script and queries GitHub's API to detect if a template release is available, alerting the user once on Telegram to go sync their code.
 *   **GitHub Action Dispatch, Security Hardening & CSP Proxying (July 2026):**
     *   **Credential Sanitization in config.json**: Strips `gemini_api_key`, `telegram_bot_token`, and `scraperapi_key` plain-text variables from committed config files to satisfy GitGuardian security scanners.
     *   **GitHub Action Secrets fallback**: Enabled `main.py` to securely read credentials from GitHub Actions secrets (injected as env variables in `scan.yml`) with fallback support.

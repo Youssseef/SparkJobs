@@ -135,6 +135,61 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
             
     return False
 
+def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str):
+    """
+    Checks the remote template repository for new releases or main updates
+    by comparing git hash objects. Sends a single Telegram alert if an update is found.
+    """
+    try:
+        import urllib.request
+        import urllib.error
+        import hashlib
+        
+        main_py_path = os.path.join(BASE_DIR, "src", "main.py")
+        if not os.path.exists(main_py_path):
+            return
+            
+        with open(main_py_path, "rb") as f:
+            local_data = f.read()
+        local_header = f"blob {len(local_data)}\0".encode('utf-8')
+        sha1 = hashlib.sha1()
+        sha1.update(local_header)
+        sha1.update(local_data)
+        local_sha = sha1.hexdigest()
+        
+        template_owner = "Youssseef"
+        template_repo = "SparkJobs"
+        url = f"https://api.github.com/repos/{template_owner}/{template_repo}/contents/src/main.py"
+        
+        req = urllib.request.Request(url, headers={'User-Agent': 'SparkJobs-Bot'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            meta = json.loads(response.read().decode('utf-8'))
+            template_sha = meta.get("sha", "")
+            
+        if template_sha and local_sha != template_sha:
+            if tracker.get("last_update_alert_sha") != template_sha:
+                print("New bot code template update detected! Sending Telegram notification...")
+                if language == "ar":
+                    alert_msg = (
+                        f"⚠️ <b>تحديث جديد متوفر لكود البوت!</b>\n\n"
+                        f"هناك إصدار جديد يحتوي على ميزات وتحسينات لـ SparkJobs.\n"
+                        f"يرجى الذهاب للوحة التحكم الخاصة بك والضغط على زر <b>\"تحديث كود البوت\"</b> لتحديث ملفاتك تلقائياً."
+                        f"{SPARKGEN_FOOTER}"
+                    )
+                else:
+                    alert_msg = (
+                        f"⚠️ <b>New Bot Update Available!</b>\n\n"
+                        f"A new template version of SparkJobs is available with bug fixes and enhancements.\n"
+                        f"Please go to your dashboard settings and click <b>\"Sync Bot Code\"</b> to update automatically."
+                        f"{SPARKGEN_FOOTER}"
+                    )
+                sent = send_telegram_message(bot_token, chat_id, alert_msg)
+                if sent:
+                    tracker["last_update_alert_sha"] = template_sha
+                    save_status_tracker(tracker)
+    except Exception as update_err:
+        print(f"Failed to check for template updates (non-blocking): {update_err}")
+
 def run_scanner():
     """
     Orchestrator for the periodic job scan.
@@ -420,6 +475,9 @@ def run_scanner():
                 save_status_tracker(tracker)
     except Exception as e:
         print(f"Error executing weekly summary routine: {e}")
+
+    # Check for template updates
+    check_for_updates(bot_token, chat_id, tracker, language)
 
     print("=== Scan Cycle Completed ===")
 

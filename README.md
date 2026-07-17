@@ -16,6 +16,11 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Role-Core Filtering, URL Reliability & NaN Guards (July 2026):**
+    *   **Role-Core-Word Title Filtering**: Refactored `is_title_relevant` to extract the core role word (e.g., `designer` from `Product Designer`) and enforce that it appears in the job title, stopping cross-field contamination (e.g. "Product Manager" matching a "Product Designer" search).
+    *   **Google Jobs URL Ephemeral Filtering**: Discards Google Jobs session-redirect URLs (`ibp=htl;jobs`) that expire within hours and lead to mismatched/wrong jobs, ensuring only reliable direct employer links are alert targets.
+    *   **NaN & String Guards**: Added `safe_str` helper to guard against pandas `NaN` values, preventing literal `"nan"` strings in company/location alerts.
+    *   **CV Fallback Retrieval**: Enhanced `get_cv_text` to automatically fallback to `default_cv` files if the target version pointer is missing, keeping the CV parser robust.
 *   **Indeed URL Resolving & Relevance Keywords (July 2026):**
     *   **Direct Indeed URLs**: Reconstructed clean Indeed URLs (`https://www.indeed.com/viewjob?jk={id}`) inside `scraper.py` using JobSpy's unique keys to prevent redirected or expired links.
     *   **Discipline Match Filters**: Removed generic domain nouns (`designer`, `developer`, `engineer`, `manager`) from title pre-filtering `fillers` list in `main.py` so that keyword overlap logic checks actual disciplines correctly.

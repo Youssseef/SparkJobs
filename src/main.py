@@ -70,67 +70,78 @@ def load_config() -> dict:
 
 def get_cv_text(cv_version: str) -> str:
     """
-    Loads text from CV file. Supports .pdf and .txt.
+    Loads text from CV file. Supports .pdf, .docx, and .txt.
+    Tries fallback options if the configured version is missing.
     """
-    if not cv_version:
-        return ""
-    
-    # Check for PDF
-    pdf_path = os.path.join(CVS_DIR, f"{cv_version}.pdf")
-    if os.path.exists(pdf_path):
-        return extract_text_from_pdf(pdf_path)
-        
-    # Check for DOCX
-    docx_path = os.path.join(CVS_DIR, f"{cv_version}.docx")
-    if os.path.exists(docx_path):
-        return extract_text_from_docx(docx_path)
-        
-    # Check for TXT fallback
-    txt_path = os.path.join(CVS_DIR, f"{cv_version}.txt")
-    if os.path.exists(txt_path):
-        try:
-            with open(txt_path, "r", encoding="utf-8") as f:
-                return f.read().strip()
-        except Exception as e:
-            print(f"Error reading txt CV {txt_path}: {e}")
+    versions_to_try = []
+    if cv_version:
+        versions_to_try.append(cv_version)
+    if "default_cv" not in versions_to_try:
+        versions_to_try.append("default_cv")
+
+    for ver in versions_to_try:
+        # Check for PDF
+        pdf_path = os.path.join(CVS_DIR, f"{ver}.pdf")
+        if os.path.exists(pdf_path):
+            return extract_text_from_pdf(pdf_path)
             
-    print(f"Warning: CV file not found for '{cv_version}' in {CVS_DIR}")
+        # Check for DOCX
+        docx_path = os.path.join(CVS_DIR, f"{ver}.docx")
+        if os.path.exists(docx_path):
+            return extract_text_from_docx(docx_path)
+            
+        # Check for TXT fallback
+        txt_path = os.path.join(CVS_DIR, f"{ver}.txt")
+        if os.path.exists(txt_path):
+            try:
+                with open(txt_path, "r", encoding="utf-8") as f:
+                    return f.read().strip()
+            except Exception as e:
+                print(f"Error reading txt CV {txt_path}: {e}")
+                
+    print(f"Warning: CV file not found for versions {versions_to_try} in {CVS_DIR}")
     return ""
+
+def get_role_core(title: str, fillers: set) -> str:
+    """
+    Extracts the defining core role word from a job title by checking from the end.
+    e.g., "Product Designer" -> "designer"
+          "UX/UI Developer" -> "developer"
+          "Senior Frontend Architect" -> "architect"
+    """
+    import re
+    words = re.findall(r'\b\w+\b', title.lower())
+    for word in reversed(words):
+        if word not in fillers and len(word) > 3:
+            return word
+    return words[-1] if words else ""
 
 def is_title_relevant(job_title: str, target_titles: list) -> bool:
     """
-    Performs a case-insensitive keyword overlap check to ensure the job title
-    is semantically related to the configured target titles.
+    Performs case-insensitive semantic relevance checking.
+    Ensures that the job title is relevant to at least one target title by verifying
+    direct substring match or overlap of the target's core role word.
     """
     if not target_titles:
         return True
     
-    import re
-    # Standardize job title (alphanumeric and spaces)
-    job_words = set(re.findall(r'\b\w+\b', job_title.lower()))
-    
-    # Common filler words to ignore in match overlap checks
     fillers = {
         "senior", "junior", "lead", "staff", "principal", "remote", "hybrid", "onsite", 
         "jobs", "job", "intern", "associate", 
         "middle", "mid", "expert", "specialist", "professional", "director", "vp", "head"
     }
     
-    job_keywords = job_words - fillers
-    if not job_keywords:
-        job_keywords = job_words
-        
     for target in target_titles:
         target_lower = target.lower()
-        if target_lower in job_title.lower():
+        job_lower = job_title.lower()
+        
+        # 1. Direct substring match (fast path)
+        if target_lower in job_lower:
             return True
             
-        target_words = set(re.findall(r'\b\w+\b', target_lower))
-        target_keywords = target_words - fillers
-        if not target_keywords:
-            target_keywords = target_words
-            
-        if job_keywords.intersection(target_keywords):
+        # 2. Core role word matching (stops cross-field contamination, e.g. Designer vs Manager)
+        core = get_role_core(target_lower, fillers)
+        if core and core in job_lower:
             return True
             
     return False

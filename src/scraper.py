@@ -7,6 +7,30 @@ from datetime import datetime, timedelta
 from jobspy import scrape_jobs
 import pandas as pd
 
+def safe_str(value) -> str:
+    """
+    Guard against pandas NaN/None values, returning empty string or trimmed string.
+    """
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
+
+def is_url_reliable(url: str, site: str) -> bool:
+    """
+    Returns False for Google session-redirect URLs that decay within hours.
+    These cause alerts to open completely different jobs than what was scraped.
+    """
+    if not url or not url.strip():
+        return False
+    if "google" in site.lower() and "ibp=htl;jobs" in url:
+        return False
+    return True
+
 def get_scraperapi_proxy(api_key: str) -> str:
     """
     Returns the ScraperAPI proxy URL string.
@@ -88,25 +112,31 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 if pd.isna(desc):
                     desc = ""
 
-                site = str(row.get("site", "JobSpy")).lower()
-                job_id = str(row.get("id", ""))
-                url = row.get("job_url_direct", "")
-                if pd.isna(url) or not str(url).strip():
-                    url = row.get("job_url", "")
-                url = str(url)
+                site = safe_str(row.get("site", "JobSpy")).lower()
+                job_id = safe_str(row.get("id", ""))
+                url_direct = safe_str(row.get("job_url_direct", ""))
+                url_indirect = safe_str(row.get("job_url", ""))
+                
+                # Always prefer direct employer link
+                url = url_direct if url_direct else url_indirect
 
                 if site == "indeed" and job_id:
                     clean_id = job_id.replace("indeed-", "")
                     url = f"https://www.indeed.com/viewjob?jk={clean_id}"
 
+                # Skip Google jobs with unreliable redirect URLs
+                if not is_url_reliable(url, site):
+                    print(f"Skipping job with unreliable session URL: {safe_str(row.get('title'))}")
+                    continue
+
                 jobs_list.append({
                     "id": job_id,
-                    "title": str(row.get("title", "")),
-                    "company": str(row.get("company", "")),
-                    "location": str(row.get("location", "")),
+                    "title": safe_str(row.get("title", "")),
+                    "company": safe_str(row.get("company", "")),
+                    "location": safe_str(row.get("location", "")),
                     "url": url,
-                    "description": str(desc),
-                    "source": str(row.get("site", "JobSpy")),
+                    "description": safe_str(desc),
+                    "source": safe_str(row.get("site", "JobSpy")),
                     "date": datetime.now().isoformat()
                 })
         
@@ -215,8 +245,13 @@ def scrape_weworkremotely(search_term: str) -> list:
                     title = item.find("title").text if item.find("title") is not None else ""
                     link = item.find("link").text if item.find("link") is not None else ""
                     desc = item.find("description").text if item.find("description") is not None else ""
-                    guid = item.find("guid").text if item.find("guid") is not None else link
+                    guid = item.find("guid").text if item.find("guid") is not None else ""
                     
+                    # Use guid as canonical URL if link is empty
+                    url = link if (link and link.strip()) else guid
+                    if not url or not url.strip():
+                        url = guid
+
                     # Manual keyword filter for search term
                     if search_term.lower() in title.lower() or search_term.lower() in desc.lower():
                         # Parse company name from title "Company: Position"
@@ -227,12 +262,12 @@ def scrape_weworkremotely(search_term: str) -> list:
                             title = parts[1].strip()
 
                         jobs_list.append({
-                            "id": f"wwr-{guid.split('/')[-1] if '/' in guid else guid}",
-                            "title": title,
-                            "company": company,
+                            "id": f"wwr-{guid.split('/')[-1] if '/' in guid else (link.split('/')[-1] if '/' in link else str(random.randint(10000, 99999)))}",
+                            "title": safe_str(title),
+                            "company": safe_str(company),
                             "location": "Remote",
-                            "url": link,
-                            "description": desc,
+                            "url": url,
+                            "description": safe_str(desc),
                             "source": "We Work Remotely",
                             "date": datetime.now().isoformat()
                         })

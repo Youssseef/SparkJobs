@@ -88,12 +88,23 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 if pd.isna(desc):
                     desc = ""
 
+                site = str(row.get("site", "JobSpy")).lower()
+                job_id = str(row.get("id", ""))
+                url = row.get("job_url_direct", "")
+                if pd.isna(url) or not str(url).strip():
+                    url = row.get("job_url", "")
+                url = str(url)
+
+                if site == "indeed" and job_id:
+                    clean_id = job_id.replace("indeed-", "")
+                    url = f"https://www.indeed.com/viewjob?jk={clean_id}"
+
                 jobs_list.append({
-                    "id": str(row.get("id", "")),
+                    "id": job_id,
                     "title": str(row.get("title", "")),
                     "company": str(row.get("company", "")),
                     "location": str(row.get("location", "")),
-                    "url": str(row.get("job_url", "")),
+                    "url": url,
                     "description": str(desc),
                     "source": str(row.get("site", "JobSpy")),
                     "date": datetime.now().isoformat()

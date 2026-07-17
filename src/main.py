@@ -112,7 +112,7 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
     # Common filler words to ignore in match overlap checks
     fillers = {
         "senior", "junior", "lead", "staff", "principal", "remote", "hybrid", "onsite", 
-        "jobs", "job", "developer", "engineer", "designer", "manager", "intern", "associate", 
+        "jobs", "job", "intern", "associate", 
         "middle", "mid", "expert", "specialist", "professional", "director", "vp", "head"
     }
     

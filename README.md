@@ -16,6 +16,11 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Template Sync Fallbacks, Webhook Validation, Strict Google Jobs Filters & CV Cleanup (July 2026):**
+    *   **Master Repository Sync Correction**: Aligned default fallback templates in `jobsRoutes.js` to point to `Youssseef/SparkJobs` as the master repository instead of legacy references, ensuring the "Sync Bot Code" feature fetches the correct codebase.
+    *   **CV Extension Cleanups**: Implemented automatic directory scans on CV updates via `write-config` to check and delete older resume formats (e.g. removing old `.pdf` when uploading `.docx`). This prevents precedence collisions where the python runner preferred old ghost files.
+    *   **Strict Google Jobs Redirect Filters**: Refactored Google Jobs scraper outputs in `scraper.py` to enforce that listings must have a direct employer ATS link (`job_url_direct`) and discard generic Google Jobs redirect URLs, which solved wrong job details and decaying URLs in Telegram.
+    *   **Telegram Webhook Token Integration**: Appended bot token queries to the Telegram webhook registration URL. This allows the backend to capture token values dynamically and reply to messages even during early onboarding or guest states.
 *   **Role-Core Filtering, URL Reliability & NaN Guards (July 2026):**
     *   **Role-Core-Word Title Filtering**: Refactored `is_title_relevant` to extract the core role word (e.g., `designer` from `Product Designer`) and enforce that it appears in the job title, stopping cross-field contamination (e.g. "Product Manager" matching a "Product Designer" search).
     *   **Google Jobs URL Ephemeral Filtering**: Discards Google Jobs session-redirect URLs (`ibp=htl;jobs`) that expire within hours and lead to mismatched/wrong jobs, ensuring only reliable direct employer links are alert targets.

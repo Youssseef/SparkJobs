@@ -124,8 +124,15 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                     clean_id = job_id.replace("indeed-", "")
                     url = f"https://www.indeed.com/viewjob?jk={clean_id}"
 
-                # Skip Google jobs with unreliable redirect URLs
-                if not is_url_reliable(url, site):
+                # Skip Google jobs with unreliable redirect URLs (must have a direct employer ATS link)
+                if site == "google":
+                    if not url_direct or not url_direct.strip():
+                        print(f"Skipping Google job with no direct URL: {safe_str(row.get('title'))}")
+                        continue
+                    if "google.com/search" in url_direct:
+                        print(f"Skipping Google job with search link as direct URL: {safe_str(row.get('title'))}")
+                        continue
+                elif not is_url_reliable(url, site):
                     print(f"Skipping job with unreliable session URL: {safe_str(row.get('title'))}")
                     continue
 

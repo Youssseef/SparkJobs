@@ -45,6 +45,8 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Checkout the branch explicitly to avoid detached HEAD failures
+          git checkout ${{ github.ref_name }}
           # Pull latest changes to avoid divergence conflicts (e.g. from user config updates)
           git pull --rebase
           # Commit BOTH seen_jobs.json (deduplication db) AND status_tracker.json (dashboard stats)

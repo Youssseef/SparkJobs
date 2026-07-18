@@ -72,11 +72,11 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
             "sweden": "sweden",
             "switzerland": "switzerland",
             "australia": "australia",
-            "worldwide": "worldwide",
-            "remote": "worldwide",
+            "worldwide": "usa",
+            "remote": "usa",
         }
 
-        country_indeed = "worldwide"  # default — safer than "usa" for unknown entries
+        country_indeed = "usa"  # default — safer fallback than invalid "worldwide" subdomain
         loc_lower = location.lower()
         for k, v in country_map.items():
             if k in loc_lower:
@@ -153,7 +153,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
         
     return jobs_list
 
-def scrape_remoteok(search_term: str) -> list:
+def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
     """
     Scrapes jobs from Remote OK API (Free JSON).
     """
@@ -165,7 +165,8 @@ def scrape_remoteok(search_term: str) -> list:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
         url = f"https://remoteok.com/api?tag={search_term.replace(' ', '-')}"
-        response = requests.get(url, headers=headers, timeout=10)
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
@@ -187,7 +188,7 @@ def scrape_remoteok(search_term: str) -> list:
         print(f"Error scraping Remote OK: {e}")
     return jobs_list
 
-def scrape_remotive(search_term: str) -> list:
+def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
     """
     Scrapes jobs from Remotive API (Free JSON).
     """
@@ -195,7 +196,8 @@ def scrape_remotive(search_term: str) -> list:
     try:
         print(f"Scraping Remotive for '{search_term}'...")
         url = f"https://remotive.com/api/remote-jobs?search={search_term}"
-        response = requests.get(url, timeout=10)
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        response = requests.get(url, proxies=proxies, timeout=10)
         if response.status_code == 200:
             data = response.json()
             jobs = data.get("jobs", [])
@@ -215,7 +217,7 @@ def scrape_remotive(search_term: str) -> list:
         print(f"Error scraping Remotive: {e}")
     return jobs_list
 
-def scrape_weworkremotely(search_term: str) -> list:
+def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
     """
     Scrapes jobs from We Work Remotely RSS Feed (Free XML).
     """
@@ -242,42 +244,43 @@ def scrape_weworkremotely(search_term: str) -> list:
             category = "remote-business-exec-management-jobs"
             
         url = f"https://weworkremotely.com/categories/{category}.rss"
-        response = requests.get(url, timeout=10)
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        response = requests.get(url, proxies=proxies, timeout=10)
         
         if response.status_code == 200:
-            root = ET.fromstring(response.content)
-            channel = root.find("channel")
-            if channel is not None:
-                for item in channel.findall("item"):
-                    title = item.find("title").text if item.find("title") is not None else ""
-                    link = item.find("link").text if item.find("link") is not None else ""
-                    desc = item.find("description").text if item.find("description") is not None else ""
-                    guid = item.find("guid").text if item.find("guid") is not None else ""
-                    
-                    # Use guid as canonical URL if link is empty
-                    url = link if (link and link.strip()) else guid
-                    if not url or not url.strip():
-                        url = guid
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.content, "xml")
+            items = soup.find_all("item")
+            for item in items:
+                title = item.find("title").text if item.find("title") is not None else ""
+                link = item.find("link").text if item.find("link") is not None else ""
+                desc = item.find("description").text if item.find("description") is not None else ""
+                guid = item.find("guid").text if item.find("guid") is not None else ""
+                
+                # Use guid as canonical URL if link is empty
+                url = link if (link and link.strip()) else guid
+                if not url or not url.strip():
+                    url = guid
 
-                    # Manual keyword filter for search term
-                    if search_term.lower() in title.lower() or search_term.lower() in desc.lower():
-                        # Parse company name from title "Company: Position"
-                        company = "WeWorkRemotely"
-                        if ":" in title:
-                            parts = title.split(":", 1)
-                            company = parts[0].strip()
-                            title = parts[1].strip()
+                # Manual keyword filter for search term
+                if search_term.lower() in title.lower() or search_term.lower() in desc.lower():
+                    # Parse company name from title "Company: Position"
+                    company = "WeWorkRemotely"
+                    if ":" in title:
+                        parts = title.split(":", 1)
+                        company = parts[0].strip()
+                        title = parts[1].strip()
 
-                        jobs_list.append({
-                            "id": f"wwr-{guid.split('/')[-1] if '/' in guid else (link.split('/')[-1] if '/' in link else str(random.randint(10000, 99999)))}",
-                            "title": safe_str(title),
-                            "company": safe_str(company),
-                            "location": "Remote",
-                            "url": url,
-                            "description": safe_str(desc),
-                            "source": "We Work Remotely",
-                            "date": datetime.now().isoformat()
-                        })
+                    jobs_list.append({
+                        "id": f"wwr-{guid.split('/')[-1] if '/' in guid else (link.split('/')[-1] if '/' in link else str(random.randint(10000, 99999)))}",
+                        "title": safe_str(title),
+                        "company": safe_str(company),
+                        "location": "Remote",
+                        "url": url,
+                        "description": safe_str(desc),
+                        "source": "We Work Remotely",
+                        "date": datetime.now().isoformat()
+                    })
         print(f"We Work Remotely found {len(jobs_list)} jobs.")
     except Exception as e:
         print(f"Error scraping We Work Remotely: {e}")
@@ -288,21 +291,20 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "") -
     Runs scraping across all available free APIs and JobSpy sources sequentially.
     """
     all_jobs = []
+    proxy_url = get_scraperapi_proxy(scraperapi_key)
     
     # 1. Scrape free remote APIs
-    all_jobs.extend(scrape_remoteok(search_term))
+    all_jobs.extend(scrape_remoteok(search_term, proxy_url))
     time.sleep(random.uniform(1.5, 3.0)) # Politeness delay
     
-    all_jobs.extend(scrape_remotive(search_term))
+    all_jobs.extend(scrape_remotive(search_term, proxy_url))
     time.sleep(random.uniform(1.5, 3.0))
     
-    all_jobs.extend(scrape_weworkremotely(search_term))
+    all_jobs.extend(scrape_weworkremotely(search_term, proxy_url))
     time.sleep(random.uniform(1.5, 3.0))
     
     # 2. Scrape JobSpy (Indeed, Google Jobs, ZipRecruiter)
     # We use ScraperAPI proxy if provided to prevent blocking
-    proxy_url = get_scraperapi_proxy(scraperapi_key)
-    
     # Google Jobs / Indeed / ZipRecruiter
     jobspy_sites = ["google"]
     if scraperapi_key: # Only scrape Indeed/ZipRecruiter if proxy is available to prevent immediate Action bans

@@ -23,16 +23,24 @@ def extract_text_from_docx(docx_path: str) -> str:
     """
     Extracts all raw text from a DOCX file using built-in libraries.
     No external dependencies required!
+    Traverses all XML subfiles in the zip (document, footnotes, headers, footers)
+    to capture all text content regardless of schema namespaces.
     """
     try:
         texts = []
         with zipfile.ZipFile(docx_path) as docx:
-            xml_content = docx.read('word/document.xml')
-            root = ET.fromstring(xml_content)
-            # Find all <w:t> elements in main namespace
-            for el in root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
-                if el.text:
-                    texts.append(el.text)
+            for file_name in docx.namelist():
+                if file_name.startswith('word/') and file_name.endswith('.xml'):
+                    try:
+                        xml_content = docx.read(file_name)
+                        root = ET.fromstring(xml_content)
+                        for el in root.iter():
+                            # Match tag ends with '}t' or is exactly 't' (handling namespaces)
+                            if el.tag.endswith('}t') or el.tag == 't':
+                                if el.text:
+                                    texts.append(el.text)
+                    except Exception:
+                        pass
         return " ".join(texts).strip()
     except Exception as e:
         print(f"Error reading DOCX {docx_path}: {e}")

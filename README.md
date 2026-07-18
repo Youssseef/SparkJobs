@@ -13,9 +13,16 @@ SparkJobs is an automated personal assistant designed to query local and interna
 It is designed to run 100% free on **GitHub Actions** as a cron schedule with no server hosting compute costs. The bot is managed and configured directly from the **SparkGen Admin Dashboard** using a bilingual setup wizard and control panel.
 
 ---
-
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Proxy Resilience, BS4 RSS Parsing, Robust DOCX parsing & DB Security (July 2026):**
+    *   **Proxy Resilience for Free APIs**: Added ScraperAPI proxy routing support to all scraper functions (`scrape_remoteok`, `scrape_remotive`, `scrape_weworkremotely`) to bypass Cloudflare rate-limit blocks inside GitHub Actions.
+    *   **BS4 RSS XML Parsing**: Refactored the WeWorkRemotely scraper to parse XML using BeautifulSoup (`BeautifulSoup(..., "xml")`) instead of strict ElementTree, preventing parser crashes on unescaped HTML description elements.
+    *   **Indeed Subdomain Fix**: Standardized Indeed country fallback to `"usa"` instead of `"worldwide"` (which Indeed does not support).
+    *   **Robust XML DOCX Parser**: Replaced single-file main XML extraction with a recursive zip traversal that extracts text from all `.xml` documents (document, footnotes, headers, footers) regardless of namespaced tag variants.
+    *   **Model Cascade Parity**: Added `gemini-3.1-flash-lite` to the bot's matching cascade to maintain alignment with backend validator features.
+    *   **GitHub Token Update checks**: Configured template update queries in `main.py` to authenticate using `GITHUB_TOKEN`, resolving runner rate-limiting.
+    *   **Seen Jobs Pull Rebase**: Added a `git pull --rebase` step to `scan.yml` before committing and pushing bot state, preventing non-fast-forward push rejections.
 *   **Template Sync Fallbacks, Webhook Validation, Strict Google Jobs Filters & CV Cleanup (July 2026):**
     *   **Master Repository Sync Correction**: Aligned default fallback templates in `jobsRoutes.js` to point to `Youssseef/SparkJobs` as the master repository instead of legacy references, ensuring the "Sync Bot Code" feature fetches the correct codebase.
     *   **CV Extension Cleanups**: Implemented automatic directory scans on CV updates via `write-config` to check and delete older resume formats (e.g. removing old `.pdf` when uploading `.docx`). This prevents precedence collisions where the python runner preferred old ghost files.

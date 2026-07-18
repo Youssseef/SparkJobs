@@ -172,7 +172,12 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
         template_repo = "SparkJobs"
         url = f"https://api.github.com/repos/{template_owner}/{template_repo}/contents/src/main.py"
         
-        req = urllib.request.Request(url, headers={'User-Agent': 'SparkJobs-Bot'})
+        headers = {'User-Agent': 'SparkJobs-Bot'}
+        github_token = os.environ.get("GITHUB_TOKEN", "")
+        if github_token:
+            headers['Authorization'] = f'token {github_token}'
+            
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=5) as response:
             meta = json.loads(response.read().decode('utf-8'))
             template_sha = meta.get("sha", "")
@@ -280,8 +285,41 @@ def run_scanner():
 
     # Load candidate CV
     cv_text = get_cv_text(cv_version)
-    if not cv_text:
-        print("Warning: CV not found or empty. Running in no-CV fallback mode.")
+    if not cv_text or len(cv_text.strip()) < 150:
+        warning_type = "missing" if not cv_text else "scanned"
+        tracker_key = f"cv_warning_sent_{warning_type}"
+        if not tracker.get(tracker_key, False):
+            print(f"Warning: CV is {warning_type}. Sending warning notification via Telegram...")
+            if language == "ar":
+                if warning_type == "missing":
+                    cv_warning_msg = (
+                        f"⚠️ <b>تنبيه من SparkJobs:</b> لم نتمكن من العثور على ملف السيرة الذاتية (CV) الخاص بك في المستودع.\n\n"
+                        f"تم تشغيل البوت في وضع التدفق الكامل (بدون تصفية)، مما يعني أنك ستتلقى جميع الوظائف دون مطابقة AI.\n"
+                        f"يرجى رفع ملف السيرة الذاتية بصيغة PDF أو Word من لوحة التحكم."
+                    )
+                else:
+                    cv_warning_msg = (
+                        f"⚠️ <b>تنبيه من SparkJobs:</b> السيرة الذاتية المرفوعة فارغة أو تبدو كصورة ممسوحة ضوئياً (Scanned PDF/Image).\n\n"
+                        f"لم يتمكن محرك الذكاء الاصطناعي من قراءة النص في ملفك، وتم تفعيل وضع التدفق الكامل مؤقتاً.\n"
+                        f"يرجى إعادة رفع السيرة الذاتية كملف نصي قابل للبحث لتفعيل التصفية الذكية."
+                    )
+            else:
+                if warning_type == "missing":
+                    cv_warning_msg = (
+                        f"⚠️ <b>SparkJobs Warning:</b> Your resume (CV) file could not be found in the repository.\n\n"
+                        f"The bot is running in fallback flow-through mode (no AI filtering). You will receive all scraped jobs.\n"
+                        f"Please upload a valid PDF or Word resume from your dashboard settings."
+                    )
+                else:
+                    cv_warning_msg = (
+                        f"⚠️ <b>SparkJobs Warning:</b> Your uploaded resume appears to be empty or a scanned image (non-searchable PDF).\n\n"
+                        f"The AI model cannot extract text from this file, and the bot is running in fallback flow-through mode.\n"
+                        f"Please re-upload your resume as a text-searchable PDF, DOCX, or TXT file to enable smart matching."
+                    )
+            send_telegram_message(bot_token, chat_id, cv_warning_msg + SPARKGEN_FOOTER)
+            tracker[tracker_key] = True
+            save_status_tracker(tracker)
+        print(f"Warning: CV is {warning_type}. Running in no-CV fallback mode.")
 
     for tc in active_countries:
         country_name = tc.get("country", "Worldwide")
@@ -419,8 +457,8 @@ def run_scanner():
         # Calculate average match score
         avg_score = round(sum(match_scores) / len(match_scores), 2) if match_scores else 0
         
-        # Read API URL from environment fallback, standard production is sparkgen.net
-        telemetry_url = os.environ.get("SPARKJOBS_TELEMETRY_URL", "https://sparkgen.net/api/jobs/telemetry/ping")
+        # Read API URL from environment fallback, standard production is sparkgen-backend.vercel.app
+        telemetry_url = os.environ.get("SPARKJOBS_TELEMETRY_URL", "https://sparkgen-backend.vercel.app/api/jobs/telemetry/ping")
         
         payload = {
             "telegram_chat_id": chat_id,

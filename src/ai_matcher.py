@@ -9,6 +9,7 @@ from cv_processor import anonymize_cv_text
 MODEL_CASCADE = [
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
+    "gemini-3.1-flash-lite",
 ]
 
 def get_gemini_client(api_key: str):

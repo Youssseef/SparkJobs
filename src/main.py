@@ -28,17 +28,14 @@ def get_cv_text(cv_version: str) -> str:
         versions_to_try.append("default_cv")
 
     for ver in versions_to_try:
-        # Check for PDF
         pdf_path = os.path.join(CVS_DIR, f"{ver}.pdf")
         if os.path.exists(pdf_path):
             return extract_text_from_pdf(pdf_path)
             
-        # Check for DOCX
         docx_path = os.path.join(CVS_DIR, f"{ver}.docx")
         if os.path.exists(docx_path):
             return extract_text_from_docx(docx_path)
             
-        # Check for TXT fallback
         txt_path = os.path.join(CVS_DIR, f"{ver}.txt")
         if os.path.exists(txt_path):
             try:
@@ -69,10 +66,10 @@ def run_scanner():
     language = config.get("language", "ar")
     
     tracker = load_status_tracker()
-    tracker["scans_completed_this_week"] += 1
+    tracker["scans_completed_this_week"] = tracker.get("scans_completed_this_week", 0) + 1
     tracker["last_scan_time"] = datetime.now().isoformat()
 
-    # H-01 Fix: Load seen_jobs database ONCE into memory at the start of scan cycle
+    # Load seen_jobs database ONCE into memory at start of scan cycle
     seen_jobs = load_seen_jobs(SEEN_JOBS_PATH)
 
     # Load candidate cover letter if exists
@@ -102,17 +99,36 @@ def run_scanner():
     exclude_keywords = global_search.get("exclude_keywords", [])
     cv_version = global_search.get("cv_version", "default_cv")
 
-    target_countries = config.get("target_countries", [])
+    # Normalize target_countries (supports both string lists and dict lists)
+    raw_countries = config.get("target_countries", [])
+    target_countries = []
+    
+    if isinstance(raw_countries, list):
+        for item in raw_countries:
+            if isinstance(item, str):
+                target_countries.append({
+                    "country": item,
+                    "remote_only": False,
+                    "requires_visa": False,
+                    "min_match_score": 65,
+                    "active": True
+                })
+            elif isinstance(item, dict):
+                target_countries.append(item)
+
     if not target_countries and profiles:
         p = profiles[0]
         for countryId in p.get("countries", []):
-            target_countries.append({
-                "country": countryId,
-                "remote_only": "remote" in p.get("job_types", []),
-                "requires_visa": "sponsor_required" in p.get("visa_types", []),
-                "min_match_score": p.get("min_match_score", 65),
-                "active": p.get("active", True)
-            })
+            if isinstance(countryId, str):
+                target_countries.append({
+                    "country": countryId,
+                    "remote_only": "remote" in p.get("job_types", []),
+                    "requires_visa": "sponsor_required" in p.get("visa_types", []),
+                    "min_match_score": p.get("min_match_score", 65),
+                    "active": p.get("active", True)
+                })
+            elif isinstance(countryId, dict):
+                target_countries.append(countryId)
 
     if not target_countries:
         print("No target locations configured. Stopping scanner.")
@@ -187,11 +203,9 @@ def run_scanner():
                 try:
                     job_id = job["id"]
                     
-                    # 1. Check Deduplication (In-Memory Fast Path)
                     if is_job_seen(seen_jobs, job_id):
                         continue
                     
-                    # Check exclusion keywords
                     should_exclude = False
                     if exclude_keywords:
                         job_title_lower = job.get("title", "").lower()
@@ -208,7 +222,6 @@ def run_scanner():
                         mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
                         continue
 
-                    # Strict Title Relevance check
                     if not is_title_relevant(job.get("title", ""), job_titles):
                         print(f"Skipping off-field job title: {job['title']} at {job['company']} (not matching targets: {job_titles})")
                         mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
@@ -216,12 +229,11 @@ def run_scanner():
 
                     new_jobs_count += 1
                     total_cycle_jobs += 1
-                    tracker["jobs_evaluated_this_week"] += 1
+                    tracker["jobs_evaluated_this_week"] = tracker.get("jobs_evaluated_this_week", 0) + 1
                     
                     source = job.get("source", "Unknown")
                     job_sources_count[source] = job_sources_count.get(source, 0) + 1
                     
-                    # 2. Check Local Fraud Heuristics
                     fraud_result = analyze_job_for_fraud(job)
                     
                     if fraud_result["risk_level"] == "High":
@@ -230,7 +242,6 @@ def run_scanner():
                         scam_jobs_skipped += 1
                         continue
                     
-                    # 3. AI Semantic Match & Custom Outreach Generation
                     ai_result = analyze_job_match(
                         cv_text=cv_text,
                         job_title=job["title"],
@@ -251,7 +262,6 @@ def run_scanner():
                     
                     all_missing_keywords.extend(ai_result.get("missing_keywords", []))
                     
-                    # 4. Score Threshold Check
                     if match_score >= min_score:
                         alert_label = f"{title} ({country_name})"
                         success = send_telegram_alert(
@@ -265,7 +275,7 @@ def run_scanner():
                         if success:
                             alerts_sent_count += 1
                             total_cycle_alerts += 1
-                            tracker["alerts_sent_this_week"] += 1
+                            tracker["alerts_sent_this_week"] = tracker.get("alerts_sent_this_week", 0) + 1
                             mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
                             time.sleep(random.uniform(1.0, 2.0))
                     else:
@@ -277,7 +287,7 @@ def run_scanner():
             print(f"Scrape completed: {new_jobs_count} new postings evaluated. {alerts_sent_count} alerts sent.")
             time.sleep(random.uniform(2.0, 4.0))
 
-    # H-01 Fix: Single persistence write to seen_jobs database at the end of the scan cycle
+    # Single persistence write to seen_jobs database at the end of scan cycle
     seen_jobs = cleanup_old_jobs(seen_jobs)
     save_seen_jobs(SEEN_JOBS_PATH, seen_jobs)
     save_status_tracker(tracker)
@@ -330,21 +340,25 @@ def run_scanner():
         last_summary_dt = datetime.fromisoformat(tracker.get("last_summary_sent", datetime.now().isoformat()))
         if datetime.now() - last_summary_dt >= timedelta(days=7):
             print("Sending weekly status summary to Telegram...")
+            completed_scans = tracker.get('scans_completed_this_week', 0)
+            evaluated_jobs = tracker.get('jobs_evaluated_this_week', 0)
+            alerts_sent = tracker.get('alerts_sent_this_week', 0)
+            
             if language == "ar":
                 summary_text = (
                     f"<b>تقرير النشاط الأسبوعي لبوت SparkJobs</b>\n\n"
-                    f"• عمليات الفحص المكتملة: <b>{tracker['scans_completed_this_week']}</b>\n"
-                    f"• الوظائف التي تم تقييمها: <b>{tracker['jobs_evaluated_this_week']}</b>\n"
-                    f"• التنبيهات المرسلة: <b>{tracker['alerts_sent_this_week']}</b>\n\n"
+                    f"• عمليات الفحص المكتملة: <b>{completed_scans}</b>\n"
+                    f"• الوظائف التي تم تقييمها: <b>{evaluated_jobs}</b>\n"
+                    f"• التنبيهات المرسلة: <b>{alerts_sent}</b>\n\n"
                     f"البوت يعمل بكفاءة ويبحث عن جديد الوظائف على مدار الساعة."
                     f"{SPARKGEN_FOOTER}"
                 )
             else:
                 summary_text = (
                     f"<b>SparkJobs Weekly Activity Report</b>\n\n"
-                    f"• Scans completed: <b>{tracker['scans_completed_this_week']}</b>\n"
-                    f"• Jobs evaluated: <b>{tracker['jobs_evaluated_this_week']}</b>\n"
-                    f"• Alerts sent: <b>{tracker['alerts_sent_this_week']}</b>\n\n"
+                    f"• Scans completed: <b>{completed_scans}</b>\n"
+                    f"• Jobs evaluated: <b>{evaluated_jobs}</b>\n"
+                    f"• Alerts sent: <b>{alerts_sent}</b>\n\n"
                     f"The bot is running smoothly, scanning for new job postings 24/7."
                     f"{SPARKGEN_FOOTER}"
                 )
@@ -358,7 +372,6 @@ def run_scanner():
     except Exception as e:
         print(f"Error executing weekly summary routine: {e}")
 
-    # Check for template updates
     check_for_updates(bot_token, chat_id, tracker, language)
 
     print("=== Scan Cycle Completed ===")

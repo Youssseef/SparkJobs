@@ -58,16 +58,16 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
             "usa": "usa",
             "canada": "canada",
             "france": "france",
-            "saudi arabia": "saudiarabia",
-            "ksa": "saudiarabia",
-            "united arab emirates": "uae",
-            "uae": "uae",
+            "saudi arabia": "saudi arabia",
+            "ksa": "saudi arabia",
+            "united arab emirates": "united arab emirates",
+            "uae": "united arab emirates",
             "egypt": "egypt",
             "qatar": "qatar",
             "kuwait": "kuwait",
             "oman": "oman",
             "bahrain": "bahrain",
-            "jordan": "jordan",
+            "jordan": "usa",
             "netherlands": "netherlands",
             "sweden": "sweden",
             "switzerland": "switzerland",
@@ -117,12 +117,17 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 url_direct = safe_str(row.get("job_url_direct", ""))
                 url_indirect = safe_str(row.get("job_url", ""))
                 
-                # Always prefer direct employer link
-                url = url_direct if url_direct else url_indirect
+                # Always prefer direct employer link, fallback to official JobSpy country job_url
+                url = url_direct if (url_direct and url_direct.strip()) else url_indirect
 
-                if site == "indeed" and job_id:
-                    clean_id = job_id.replace("indeed-", "")
-                    url = f"https://www.indeed.com/viewjob?jk={clean_id}"
+                if site == "indeed":
+                    # If url is missing, construct fallback URL using clean job_id (stripping 'indeed-' and 'in-')
+                    if not url or not url.strip():
+                        clean_id = job_id.replace("indeed-", "").replace("in-", "")
+                        url = f"https://www.indeed.com/viewjob?jk={clean_id}"
+                    elif "indeed.com" in url and "jk=" in url:
+                        # Ensure any 'in-' or 'indeed-' prefix inside jk parameter is stripped so URL opens cleanly
+                        url = url.replace("jk=in-", "jk=").replace("jk=indeed-", "jk=")
 
                 # Skip Google jobs with unreliable redirect URLs (must have a direct employer ATS link)
                 if site == "google":

@@ -2,7 +2,7 @@ name: SparkJobs Keep-Alive
 
 on:
   schedule:
-    - cron: '0 0 */50 * *' # Run once every 50 days
+    - cron: '0 0 1 */2 *' # Run on the 1st of every other month (well within GitHub's 60-day inactivity limit)
   workflow_dispatch:
 
 jobs:

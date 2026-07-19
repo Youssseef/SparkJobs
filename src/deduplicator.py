@@ -11,7 +11,7 @@ def load_seen_jobs(file_path: str) -> dict:
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
+    except (json.JSONDecodeError, OSError) as e:
         print(f"Error loading seen_jobs database: {e}")
         return {}
 
@@ -20,40 +20,51 @@ def save_seen_jobs(file_path: str, data: dict):
     Saves the seen jobs dictionary back to the JSON database.
     """
     try:
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
+    except (TypeError, OSError) as e:
         print(f"Error saving seen_jobs database: {e}")
 
-def is_job_seen(file_path: str, job_id: str) -> bool:
+def is_job_seen(db: [dict, str], job_id: str) -> bool:
     """
     Checks if a job_id has been seen before.
+    Supports either a pre-loaded dict (in-memory fast path) or a file path string.
     """
-    seen_jobs = load_seen_jobs(file_path)
+    if isinstance(db, dict):
+        return job_id in db
+    seen_jobs = load_seen_jobs(db)
     return job_id in seen_jobs
 
-def mark_job_as_seen(file_path: str, job_id: str, title: str, company: str):
+def mark_job_as_seen(db: [dict, str], job_id: str, title: str, company: str):
     """
     Saves a job_id with metadata and current timestamp to the seen jobs database.
+    Supports mutating an in-memory dict or disk persistence.
     """
-    seen_jobs = load_seen_jobs(file_path)
+    if isinstance(db, dict):
+        db[job_id] = {
+            "title": title,
+            "company": company,
+            "date": datetime.now().isoformat()
+        }
+        return
+
+    seen_jobs = load_seen_jobs(db)
     seen_jobs[job_id] = {
         "title": title,
         "company": company,
         "date": datetime.now().isoformat()
     }
-    save_seen_jobs(file_path, seen_jobs)
+    save_seen_jobs(db, seen_jobs)
 
-def cleanup_old_jobs(file_path: str, days_to_keep: int = 30):
+def cleanup_old_jobs(db: [dict, str], days_to_keep: int = 30) -> dict:
     """
     Prunes the database, deleting entries older than the retention limit (default 30 days)
     to prevent file size bloat.
     """
-    seen_jobs = load_seen_jobs(file_path)
+    seen_jobs = db if isinstance(db, dict) else load_seen_jobs(db)
     if not seen_jobs:
-        return
+        return {}
 
     cutoff = datetime.now() - timedelta(days=days_to_keep)
     pruned_jobs = {}
@@ -69,18 +80,18 @@ def cleanup_old_jobs(file_path: str, days_to_keep: int = 30):
                 else:
                     pruned_count += 1
             else:
-                # Keep if date is missing to be safe
                 pruned_jobs[job_id] = meta
         except Exception:
-            # Keep on parsing errors
             pruned_jobs[job_id] = meta
 
     if pruned_count > 0:
         print(f"Cleaned up {pruned_count} old jobs from database.")
-        save_seen_jobs(file_path, pruned_jobs)
+        if isinstance(db, str):
+            save_seen_jobs(db, pruned_jobs)
+            
+    return pruned_jobs
 
 if __name__ == "__main__":
-    # Test execution
     test_db = "data/seen_jobs_test.json"
     mark_job_as_seen(test_db, "test-123", "Developer", "Acme")
     print(f"Is test-123 seen: {is_job_seen(test_db, 'test-123')}")

@@ -1,35 +1,31 @@
 # Dependencies
-web/node_modules/
 node_modules/
 
 # Next.js build outputs
-web/.next/
-web/out/
+.next/
+out/
 
 # Python virtual env and cache
-bot/venv/
-bot/.venv/
-bot/env/
+venv/
+.venv/
+env/
 __pycache__/
 *.pyc
 .pytest_cache/
 
 # Local env files
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-web/.env.local
-bot/.env
 
 # OS files
 .DS_Store
 Thumbs.db
 
 # ─── SECURITY: Never commit test files with credentials ───────────────────────
-# The test_live_alert.py file is a local-only dev tool.
-# It must NEVER contain real credentials and must never be tracked.
-bot/test_live_alert.py
+test_live_alert.py
 
 # Local credential override files
 *.env

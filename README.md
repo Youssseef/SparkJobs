@@ -15,6 +15,16 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Security Hardening, 35-Issue Audit Remediation & Modular Architecture (July 2026):**
+    *   **AES-256-GCM Token Encryption**: Implemented `cryptoHelper.js` to encrypt all GitHub Personal Access Tokens at rest in Supabase, preventing plain-text credential leaks on database compromise.
+    *   **XXE Protection**: Replaced `xml.etree.ElementTree` in `cv_processor.py` with `defusedxml.ElementTree` to prevent XML External Entity and Billion Laughs vulnerabilities.
+    *   **Telegram Webhook Authentication & Rate-Limiting**: Enforced `X-Telegram-Bot-Api-Secret-Token` validation and `jobsLimiter` rate-limiting on all webhook endpoints, securing against unauthorized command execution.
+    *   **Anti-God-Component Modular Decomposition**: Decomposed backend routes (1,659 lines → 8 modules under `src/routes/jobs/`) and python runner (`main.py` → `config_loader.py`, `title_matcher.py`, `update_checker.py`, `main.py`), keeping 100% of files under the 400-line ceiling.
+    *   **In-Memory Deduplication**: Refactored `deduplicator.py` from per-job disk reads to an in-memory dictionary pattern with single end-of-cycle file persistence, eliminating O(N²) I/O bottlenecks.
+    *   **Telegram 64-Byte Payload Safety**: Implemented MD5 truncation on button callback_data to prevent Telegram silent payload drops on long job IDs.
+    *   **URL HTML Escaping & Protocol Guards**: Enforced strict `html.escape()` and protocol checks on application links in Telegram alert templates.
+    *   **GitHub Actions Concurrency Guard**: Added `concurrency` groups to `scan.yml` to prevent race conditions during concurrent git pushes.
+
 *   **Proxy Resilience, BS4 RSS Parsing, Robust DOCX parsing & DB Security (July 2026):**
     *   **Proxy Resilience for Free APIs**: Added ScraperAPI proxy routing support to all scraper functions (`scrape_remoteok`, `scrape_remotive`, `scrape_weworkremotely`) to bypass Cloudflare rate-limit blocks inside GitHub Actions.
     *   **BS4 RSS XML Parsing**: Refactored the WeWorkRemotely scraper to parse XML using BeautifulSoup (`BeautifulSoup(..., "xml")`) instead of strict ElementTree, preventing parser crashes on unescaped HTML description elements.

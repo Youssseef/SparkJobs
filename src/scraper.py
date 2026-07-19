@@ -1,9 +1,11 @@
 import os
 import time
 import random
+import hashlib
 import requests
-import xml.etree.ElementTree as ET
+from urllib.parse import quote
 from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 import pandas as pd
 
@@ -23,7 +25,6 @@ def safe_str(value) -> str:
 def is_url_reliable(url: str, site: str) -> bool:
     """
     Returns False for Google session-redirect URLs that decay within hours.
-    These cause alerts to open completely different jobs than what was scraped.
     """
     if not url or not url.strip():
         return False
@@ -37,18 +38,15 @@ def get_scraperapi_proxy(api_key: str) -> str:
     """
     if not api_key:
         return ""
-    # ScraperAPI standard proxy endpoint
     return f"http://scraperapi:{api_key}@proxy-server.scraperapi.com:8001"
 
 def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15) -> list:
     """
-    Scrapes jobs using the python-jobspy library.
-    Handles Indeed, Glassdoor, ZipRecruiter, and Google Jobs.
+    Scrapes jobs using python-jobspy (Indeed, Glassdoor, ZipRecruiter, Google Jobs).
     """
     jobs_list = []
     try:
-        # Determine country parameter for Indeed based on location
-        # Covers all 18 countries available in the setup wizard
+        # M-08 Note: Indeed has no country subdomain for Jordan — defaults to "usa"
         country_map = {
             "germany": "germany",
             "united kingdom": "uk",
@@ -67,7 +65,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
             "kuwait": "kuwait",
             "oman": "oman",
             "bahrain": "bahrain",
-            "jordan": "usa",
+            "jordan": "usa", # Indeed has no jo.indeed.com subdomain, fallback to global
             "netherlands": "netherlands",
             "sweden": "sweden",
             "switzerland": "switzerland",
@@ -76,7 +74,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
             "remote": "usa",
         }
 
-        country_indeed = "usa"  # default — safer fallback than invalid "worldwide" subdomain
+        country_indeed = "usa"
         loc_lower = location.lower()
         for k, v in country_map.items():
             if k in loc_lower:
@@ -85,7 +83,6 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
 
         print(f"Scraping JobSpy sites {site_name} for '{search_term}' in '{location}'...")
         
-        # Configure proxies if provided
         proxies = {}
         if proxy_url:
             proxies = {
@@ -93,8 +90,6 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 "https": proxy_url
             }
 
-        # Run JobSpy scraper
-        # JobSpy returns a pandas DataFrame
         df = scrape_jobs(
             site_name=site_name,
             search_term=search_term,
@@ -107,7 +102,6 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
 
         if df is not None and not df.empty:
             for _, row in df.iterrows():
-                # Extract description securely
                 desc = row.get("description", "")
                 if pd.isna(desc):
                     desc = ""
@@ -117,28 +111,21 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 url_direct = safe_str(row.get("job_url_direct", ""))
                 url_indirect = safe_str(row.get("job_url", ""))
                 
-                # Always prefer direct employer link, fallback to official JobSpy country job_url
                 url = url_direct if (url_direct and url_direct.strip()) else url_indirect
 
                 if site == "indeed":
-                    # If url is missing, construct fallback URL using clean job_id (stripping 'indeed-' and 'in-')
                     if not url or not url.strip():
                         clean_id = job_id.replace("indeed-", "").replace("in-", "")
                         url = f"https://www.indeed.com/viewjob?jk={clean_id}"
                     elif "indeed.com" in url and "jk=" in url:
-                        # Ensure any 'in-' or 'indeed-' prefix inside jk parameter is stripped so URL opens cleanly
                         url = url.replace("jk=in-", "jk=").replace("jk=indeed-", "jk=")
 
-                # Skip Google jobs with unreliable redirect URLs (must have a direct employer ATS link)
                 if site == "google":
                     if not url_direct or not url_direct.strip():
-                        print(f"Skipping Google job with no direct URL: {safe_str(row.get('title'))}")
                         continue
                     if "google.com/search" in url_direct:
-                        print(f"Skipping Google job with search link as direct URL: {safe_str(row.get('title'))}")
                         continue
                 elif not is_url_reliable(url, site):
-                    print(f"Skipping job with unreliable session URL: {safe_str(row.get('title'))}")
                     continue
 
                 jobs_list.append({
@@ -160,22 +147,21 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
 
 def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
     """
-    Scrapes jobs from Remote OK API (Free JSON).
+    H-03 Fix: URL-encodes search_term query parameter to prevent broken requests.
     """
     jobs_list = []
     try:
         print(f"Scraping Remote OK for '{search_term}'...")
-        # Remote OK requires a proper User-Agent
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
-        url = f"https://remoteok.com/api?tag={search_term.replace(' ', '-')}"
+        encoded_tag = quote(search_term.replace(' ', '-'))
+        url = f"https://remoteok.com/api?tag={encoded_tag}"
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
         response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            # Remote OK API returns a list where the first element is legal info/stats
             if isinstance(data, list) and len(data) > 1:
                 for item in data[1:]:
                     jobs_list.append({
@@ -195,14 +181,14 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
 
 def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
     """
-    Scrapes jobs from Remotive API (Free JSON).
+    H-03 Fix: Uses requests params dict for proper URL parameter encoding.
     """
     jobs_list = []
     try:
         print(f"Scraping Remotive for '{search_term}'...")
-        url = f"https://remotive.com/api/remote-jobs?search={search_term}"
+        url = "https://remotive.com/api/remote-jobs"
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        response = requests.get(url, proxies=proxies, timeout=10)
+        response = requests.get(url, params={"search": search_term}, proxies=proxies, timeout=10)
         if response.status_code == 200:
             data = response.json()
             jobs = data.get("jobs", [])
@@ -224,14 +210,13 @@ def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
 
 def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
     """
-    Scrapes jobs from We Work Remotely RSS Feed (Free XML).
+    Scrapes jobs from We Work Remotely RSS Feed.
     """
     jobs_list = []
     try:
         print(f"Scraping We Work Remotely for '{search_term}'...")
         
-        # Dynamically map search term to WWR category RSS feed
-        category = "remote-programming-jobs" # default
+        category = "remote-programming-jobs"
         st_lower = search_term.lower()
         if any(kw in st_lower for kw in ["design", "ux", "ui", "creative", "artist", "illustrator"]):
             category = "remote-design-jobs"
@@ -253,7 +238,6 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
         response = requests.get(url, proxies=proxies, timeout=10)
         
         if response.status_code == 200:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(response.content, "xml")
             items = soup.find_all("item")
             for item in items:
@@ -262,22 +246,27 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                 desc = item.find("description").text if item.find("description") is not None else ""
                 guid = item.find("guid").text if item.find("guid") is not None else ""
                 
-                # Use guid as canonical URL if link is empty
                 url = link if (link and link.strip()) else guid
                 if not url or not url.strip():
                     url = guid
 
-                # Manual keyword filter for search term
                 if search_term.lower() in title.lower() or search_term.lower() in desc.lower():
-                    # Parse company name from title "Company: Position"
                     company = "WeWorkRemotely"
                     if ":" in title:
                         parts = title.split(":", 1)
                         company = parts[0].strip()
                         title = parts[1].strip()
 
+                    # L-07 Fix: Deterministic fallback hash instead of random integer
+                    if guid and '/' in guid:
+                        raw_id = guid.split('/')[-1]
+                    elif link and '/' in link:
+                        raw_id = link.split('/')[-1]
+                    else:
+                        raw_id = hashlib.md5(f"{title}:{company}".encode()).hexdigest()[:12]
+
                     jobs_list.append({
-                        "id": f"wwr-{guid.split('/')[-1] if '/' in guid else (link.split('/')[-1] if '/' in link else str(random.randint(10000, 99999)))}",
+                        "id": f"wwr-{raw_id}",
                         "title": safe_str(title),
                         "company": safe_str(company),
                         "location": "Remote",
@@ -292,15 +281,11 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
     return jobs_list
 
 def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "") -> list:
-    """
-    Runs scraping across all available free APIs and JobSpy sources sequentially.
-    """
     all_jobs = []
     proxy_url = get_scraperapi_proxy(scraperapi_key)
     
-    # 1. Scrape free remote APIs
     all_jobs.extend(scrape_remoteok(search_term, proxy_url))
-    time.sleep(random.uniform(1.5, 3.0)) # Politeness delay
+    time.sleep(random.uniform(1.5, 3.0))
     
     all_jobs.extend(scrape_remotive(search_term, proxy_url))
     time.sleep(random.uniform(1.5, 3.0))
@@ -308,14 +293,11 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "") -
     all_jobs.extend(scrape_weworkremotely(search_term, proxy_url))
     time.sleep(random.uniform(1.5, 3.0))
     
-    # 2. Scrape JobSpy (Indeed, Google Jobs, ZipRecruiter)
-    # We use ScraperAPI proxy if provided to prevent blocking
-    # Google Jobs / Indeed / ZipRecruiter
     jobspy_sites = ["google"]
-    if scraperapi_key: # Only scrape Indeed/ZipRecruiter if proxy is available to prevent immediate Action bans
+    if scraperapi_key:
         jobspy_sites.extend(["indeed", "zip_recruiter"])
     else:
-        print("Warning: No ScraperAPI key provided. Skipping Indeed and ZipRecruiter scrapes to prevent IP blocking, and running Google Jobs without a proxy.")
+        print("Warning: No ScraperAPI key provided. Skipping Indeed and ZipRecruiter scrapes.")
         
     jobspy_jobs = scrape_jobspy(
         site_name=jobspy_sites,
@@ -328,6 +310,5 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "") -
     return all_jobs
 
 if __name__ == "__main__":
-    # Test execution
     jobs = run_all_scrapes("React", "Remote")
     print(f"Total jobs scraped: {len(jobs)}")

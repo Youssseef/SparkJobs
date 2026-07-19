@@ -8,6 +8,9 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    concurrency:
+      group: sparkjobs-scan-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: write # Crucial permission to commit seen_jobs.json back to repo
       
@@ -26,22 +29,19 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
-          # Install jobspy first, ignoring numpy requirement to avoid compile errors
           pip install python-jobspy --no-deps
-          # Install beautifulsoup4, markdownify, pydantic, regex, tls-client
           pip install beautifulsoup4 markdownify pydantic regex tls-client
-          # Install rest of requirements
           pip install -r requirements.txt
 
       - name: Run Job Scanner
         run: python src/main.py
         env:
-          # Use secrets defined in Github Repo Settings
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPARKJOBS_PING_SECRET: ${{ secrets.SPARKJOBS_PING_SECRET }}
 
       - name: Commit and Push bot state back to repository
         run: |

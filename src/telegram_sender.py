@@ -1,5 +1,6 @@
 import requests
 import html
+import hashlib
 
 SPARKGEN_FOOTER = "\n\n─────────────────\nPowered by <a href='https://sparkgen.net'>SparkGen</a>"
 
@@ -11,15 +12,28 @@ def escape_html(text: str) -> str:
         return ""
     return html.escape(str(text))
 
+def safe_callback_id(job_id: str, action: str = "applied") -> str:
+    """
+    H-02 Fix: Guarantees callback_data stays under Telegram's 64-byte limit.
+    """
+    prefix = f"{action}:"
+    raw_str = f"{prefix}{job_id}"
+    if len(raw_str.encode('utf-8')) <= 64:
+        return raw_str
+    
+    # Hash long IDs deterministically to fit 64-byte budget
+    hashed_id = hashlib.md5(job_id.encode('utf-8')).hexdigest()[:32]
+    return f"{prefix}{hashed_id}"
+
 def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: dict, profile_name: str, language: str = "ar") -> bool:
     """
-    Sends a beautifully formatted HTML job alert message to Telegram.
+    Sends a formatted HTML job alert message to Telegram.
     """
     if not bot_token or not chat_id:
         print("Missing Telegram bot_token or chat_id. Alert not sent.")
         return False
 
-    # 1. Format the Safety/Risk Rating Badge
+    # 1. Format Safety/Risk Rating Badge
     risk_level = ai_analysis.get("risk_level", "Low")
     if language == "ar":
         if risk_level == "High":
@@ -50,7 +64,6 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     # 3. Format outreach message
     outreach = ai_analysis.get("outreach_message", "")
     
-    # Pre-build sections to avoid backslashes inside f-string expression braces (Python <3.12 compatibility)
     if language == "ar":
         pros_section = f"\n<b>✅ نقاط القوة:</b>\n{pros}" if pros else ""
         cons_section = f"\n<b>⚠️ فجوات:</b>\n{cons}" if cons else ""
@@ -60,7 +73,13 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
         cons_section = f"\n<b>⚠️ Gaps:</b>\n{cons}" if cons else ""
         missing_section = f"\n<b>🔍 Missing Keywords:</b> {missing}" if missing else ""
 
-    # 4. Construct the HTML message body
+    # C-03 Fix: HTML escape and validate job URL
+    raw_url = job.get('url', '')
+    safe_url = escape_html(raw_url)
+    if not (raw_url.startswith('http://') or raw_url.startswith('https://')):
+        safe_url = "https://sparkgen.net"
+
+    # 4. Construct HTML message body
     if language == "ar":
         message = f"""<b>وظيفة جديدة | {escape_html(profile_name)}</b>
  
@@ -79,7 +98,7 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-رابط التقديم: <a href="{job.get('url', '')}">قدّم الآن (Apply Now)</a>{SPARKGEN_FOOTER}
+رابط التقديم: <a href="{safe_url}">قدّم الآن (Apply Now)</a>{SPARKGEN_FOOTER}
 """
     else:
         message = f"""<b>New Job Match | {escape_html(profile_name)}</b>
@@ -99,14 +118,17 @@ Recruiter Outreach Message:
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-Application Link: <a href="{job.get('url', '')}">Apply Now</a>{SPARKGEN_FOOTER}
+Application Link: <a href="{safe_url}">Apply Now</a>{SPARKGEN_FOOTER}
 """
 
-    
     btn_applied = "تم التقديم ✅" if language == "ar" else "Applied ✅"
     btn_ignore = "تجاهل ❌" if language == "ar" else "Ignore ❌"
     
-    # Send request to Telegram with inline buttons
+    # H-02 & M-06 Fix: Truncate callback_data safely & align action name to 'ignored'
+    job_id = str(job.get('id', ''))
+    cb_applied = safe_callback_id(job_id, "applied")
+    cb_ignored = safe_callback_id(job_id, "ignored")
+
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -116,8 +138,8 @@ Application Link: <a href="{job.get('url', '')}">Apply Now</a>{SPARKGEN_FOOTER}
         "reply_markup": {
             "inline_keyboard": [
                 [
-                    {"text": btn_applied, "callback_data": f"applied:{job['id']}"},
-                    {"text": btn_ignore, "callback_data": f"ignore:{job['id']}"}
+                    {"text": btn_applied, "callback_data": cb_applied},
+                    {"text": btn_ignore, "callback_data": cb_ignored}
                 ]
             ]
         }
@@ -162,8 +184,8 @@ def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
         return False
 
 if __name__ == "__main__":
-    # Quick mock test
     dummy_job = {
+        "id": "test-job-12345",
         "title": "React Developer",
         "company": "Tech Solutions",
         "location": "Remote (Germany)",
@@ -174,12 +196,10 @@ if __name__ == "__main__":
         "match_score": 85,
         "risk_level": "Low",
         "risk_reason": "Verified corporate site",
-        "pros": ["Strong JavaScript foundation", "React experience aligns perfectly"],
+        "pros": ["Strong JavaScript foundation"],
         "cons": ["Lacks Docker expertise"],
-        "missing_keywords": ["Docker", "GraphQL"],
-        "outreach_message": "Hi Recruiting Team, I noticed your opening for a React Developer at Tech Solutions. My skills align well with your stack..."
+        "missing_keywords": ["Docker"],
+        "outreach_message": "Hi Recruiting Team..."
     }
-    # To run test, set keys or check mock output:
     print("Formatted message template check:")
-    print("Test will run silently as no keys are provided.")
     send_telegram_alert("", "", dummy_job, dummy_analysis, "React Developer")

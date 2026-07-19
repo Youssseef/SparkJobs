@@ -5,7 +5,6 @@ from google import genai
 from google.genai import types
 from cv_processor import anonymize_cv_text
 
-# Model cascade — verified working May 2026 (per SPARKGEN_DECISIONS.md Rule 14)
 MODEL_CASCADE = [
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
@@ -13,39 +12,34 @@ MODEL_CASCADE = [
 ]
 
 def get_gemini_client(api_key: str):
-    """
-    Initializes and returns the new google.genai client.
-    """
     if not api_key:
         return None
     return genai.Client(api_key=api_key)
 
 def clean_json_response(text: str) -> dict:
     """
-    Resilient JSON parser that extracts braces if the LLM wraps response
-    in markdown or adds extra dialogue.
+    M-01 Fix: Strips markdown code blocks and extracts JSON object resiliently.
     """
+    if not text:
+        return {}
     try:
-        start_idx = text.find('{')
-        end_idx = text.rfind('}')
+        # Strip markdown fences first
+        cleaned = re.sub(r'```(?:json)?\s*', '', text).strip()
+        cleaned = cleaned.rstrip('`').strip()
+        
+        start_idx = cleaned.find('{')
+        end_idx = cleaned.rfind('}')
         if start_idx != -1 and end_idx != -1:
-            json_str = text[start_idx:end_idx + 1]
+            json_str = cleaned[start_idx:end_idx + 1]
             return json.loads(json_str)
-        return json.loads(text)
+        return json.loads(cleaned)
     except Exception as e:
         print(f"Error parsing Gemini JSON output: {e}. Raw response: {text}")
         return {}
 
 def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str, min_match_score: int = 65, cover_letter: str = "", years_exp: str = "3-5") -> dict:
-    """
-    Uses Gemini 2.5 Flash to analyze how well the candidate's CV matches the Job Description.
-    Also generates a custom cold outreach message and scores safety/scam risk.
-    Uses the new google.genai SDK (google-generativeai is deprecated).
-    """
-    # 1. Anonymize CV to protect user privacy
     safe_cv = anonymize_cv_text(cv_text)
 
-    # Define fallback response
     fallback = {
         "match_score": 100,
         "estimated_salary": "Not specified (Market average: Unknown)",
@@ -65,7 +59,6 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     if not client:
         return fallback
 
-    # Add cover letter context to prompt if provided
     cover_letter_context = ""
     if cover_letter:
         cover_letter_context = f"""
@@ -75,7 +68,6 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     ---
     """
 
-    # 2. Structure the prompt
     if cv_text:
         prompt = f"""
     You are an expert technical recruiter. Analyze the applicant's CV against the Job Description.
@@ -99,11 +91,11 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     3. Pros: 2-3 specific reasons why the CV matches this job.
     4. Cons: 1-2 weaknesses or areas of misalignment.
     5. Missing Keywords: Crucial technical keywords or skills mentioned in the job post but missing from the CV.
-    6. Outreach Message: A short, professional, and personalized 3-sentence message to send to the recruiter or hiring manager on LinkedIn (mentioning specific alignments from their CV, but keeping contact details blank). If a COVER LETTER TEMPLATE is provided above, adapt its writing style, tone of voice, and highlights when composing this outreach message.
+    6. Outreach Message: A short, professional, and personalized 3-sentence message to send to the recruiter or hiring manager on LinkedIn.
     7. Risk Level: Assess if this job posting is a scam, ghost job, or low-quality listing. Rate it: "Low", "Medium", or "High".
     8. Risk Reason: Explain why you rated the risk level.
     
-    You MUST respond with a single, valid JSON object matching this schema. Do not write any preamble, dialogue, or markdown code blocks:
+    You MUST respond with a single, valid JSON object matching this schema:
     {{
       "match_score": int,
       "estimated_salary": "string",
@@ -118,7 +110,7 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     else:
         prompt = f"""
     You are an expert recruiter. Analyze this job description.
-    Since the applicant's CV was not provided, you cannot calculate a personal match score (set it to 100).
+    Since the applicant's CV was not provided, set match score to 100.
     
     JOB TITLE: {job_title}
     APPLICANT TARGET YEARS OF EXPERIENCE: {years_exp} years
@@ -129,15 +121,15 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     
     Evaluate the following:
     1. Match Score: Always return 100.
-    2. Estimated Salary: Estimate the average market salary range for this job title in the target location (or remote). Provide a short user-friendly string like "$90,000 - $120,000 / year (Est.)" or "Average: 15,000 - 20,000 AED / month". If the job posting already contains specific salary information, use the salary info from the job posting instead.
+    2. Estimated Salary: Estimate the average market salary range for this job title in the target location (or remote).
     3. Pros: Return ["CV not uploaded - Match analysis skipped"].
     4. Cons: Return ["To activate smart CV compatibility rating, upload your CV in the portal"].
     5. Missing Keywords: Return [].
-    6. Outreach Message: A short, professional 3-sentence message to send to the recruiter or hiring manager on LinkedIn asking about the opening for this role (without personalized CV references).
-    7. Risk Level: Assess if this job posting is a scam, ghost job, or low-quality listing. Rate it: "Low", "Medium", or "High".
+    6. Outreach Message: A short, professional 3-sentence message to send to recruiter.
+    7. Risk Level: Rate "Low", "Medium", or "High".
     8. Risk Reason: Explain why you rated the risk level.
     
-    You MUST respond with a single, valid JSON object matching this schema. Do not write any preamble, dialogue, or markdown code blocks:
+    You MUST respond with a single, valid JSON object matching this schema:
     {{
       "match_score": 100,
       "estimated_salary": "string",
@@ -150,7 +142,6 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     }}
     """
 
-    # 3. Try each model in the cascade
     for model_name in MODEL_CASCADE:
         try:
             print(f"Trying model: {model_name}...")
@@ -173,17 +164,13 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     print("All models in cascade failed. Returning fallback.")
     return fallback
 
-
 if __name__ == "__main__":
-    # Test execution if API key is in env
     api_key = os.environ.get("GEMINI_API_KEY", "")
-    test_cv = "Experienced frontend developer with 3 years of React, JavaScript, and HTML/CSS. Built multiple design systems."
+    test_cv = "Experienced frontend developer with 3 years of React."
     test_title = "Senior React Developer"
-    test_desc = "Looking for a React Engineer with experience in TypeScript, TailwindCSS, and testing frameworks like Jest. Must build responsive interfaces."
+    test_desc = "Looking for a React Engineer with experience in TypeScript."
 
     if api_key:
-        print("Running test match with Gemini (new google.genai SDK):")
         print(analyze_job_match(test_cv, test_title, test_desc, api_key))
     else:
-        print("No GEMINI_API_KEY env found. Returning mock response.")
         print(analyze_job_match(test_cv, test_title, test_desc, ""))

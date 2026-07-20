@@ -138,26 +138,31 @@ sparkjobs/
 
 ## ⚡ Getting Started (Local Development)
 
-### 1. Web Portal Client (Next.js)
-The local web manager allows you to enter your credentials, select search criteria (job titles, target countries, job styles, visa status), and compile the initial setup.
+### 1. Web Portal Client (Admin Dashboard)
+The SparkJobs web portal interface is embedded directly inside the **SparkGen Admin Dashboard** (`sparkgen-admin`). It allows you to enter your credentials, configure target job titles and countries, and trigger setup flows.
 
 ```bash
-cd web
+cd sparkgen-admin
 npm install
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to access the portal.
+Open [http://localhost:5173](http://localhost:5173) (or configured dev port) to access the management portal.
 
-### 2. Scraper Bot (Python)
-If you want to run a mock scrape locally instead of on GitHub Actions:
+### 2. Scraper Bot Worker (Python)
+To run a manual or mock scan cycle locally instead of on GitHub Actions:
 
 ```bash
-cd bot
+cd sparkjobs
 # Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install requirements
+# Install dependencies
+pip install -r requirements.txt
+
+# Run scan cycle
+python src/main.py
+```
 pip install -r requirements.txt
 
 # Configure data/config.json with keys, then execute

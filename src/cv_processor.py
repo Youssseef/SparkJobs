@@ -24,10 +24,12 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         print(f"Error reading PDF {pdf_path}: {e}")
         return ""
 
+MAX_XML_SIZE_BYTES = 50 * 1024 * 1024  # 50MB safety limit
+
 def extract_text_from_docx(docx_path: str) -> str:
     """
-    C-02 Fix: Extracts raw text from DOCX using safe defusedxml parser
-    protecting against XXE and entity expansion attacks.
+    C-02 & H-04 Fix: Extracts raw text from DOCX using safe defusedxml parser
+    protecting against XXE, entity expansion, and Zip Bomb decompression attacks.
     """
     try:
         texts = []
@@ -35,6 +37,10 @@ def extract_text_from_docx(docx_path: str) -> str:
             for file_name in docx.namelist():
                 if file_name.startswith('word/') and file_name.endswith('.xml'):
                     try:
+                        info = docx.getinfo(file_name)
+                        if info.file_size > MAX_XML_SIZE_BYTES:
+                            print(f"Skipping oversized XML subfile ({info.file_size} bytes) in DOCX: {file_name}")
+                            continue
                         xml_content = docx.read(file_name)
                         root = ET.fromstring(xml_content)
                         for el in root.iter():

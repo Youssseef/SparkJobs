@@ -24,11 +24,18 @@ def safe_str(value) -> str:
 
 def is_url_reliable(url: str, site: str) -> bool:
     """
-    Returns False for Google session-redirect URLs that decay within hours.
+    Returns False for Google session-redirect URLs that decay within hours,
+    unformatted URLs, or generic category/search index landing pages.
     """
-    if not url or not url.strip():
+    if not url or not isinstance(url, str):
         return False
-    if "google" in site.lower() and "ibp=htl;jobs" in url:
+    u = url.strip().lower()
+    if not (u.startswith('http://') or u.startswith('https://')):
+        return False
+    if "google" in site.lower() or "google.com" in u:
+        if "ibp=htl;jobs" in u or "htlcert" in u or "google.com/search" in u or "google.com/url?" in u:
+            return False
+    if "weworkremotely.com/categories/" in u and not "/remote-jobs/" in u:
         return False
     return True
 
@@ -246,9 +253,17 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                 desc = item.find("description").text if item.find("description") is not None else ""
                 guid = item.find("guid").text if item.find("guid") is not None else ""
                 
-                url = link if (link and link.strip()) else guid
-                if not url or not url.strip():
-                    url = guid
+                # Prioritize direct job post link over generic category links
+                url = ""
+                if guid and (guid.startswith("http://") or guid.startswith("https://")) and "/remote-jobs/" in guid:
+                    url = guid.strip()
+                elif link and (link.startswith("http://") or link.startswith("https://")) and "/remote-jobs/" in link:
+                    url = link.strip()
+                else:
+                    url = guid.strip() if (guid and guid.strip()) else link.strip()
+
+                if not is_url_reliable(url, "We Work Remotely"):
+                    continue
 
                 if search_term.lower() in title.lower() or search_term.lower() in desc.lower():
                     company = "WeWorkRemotely"

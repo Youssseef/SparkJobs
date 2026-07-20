@@ -30,11 +30,21 @@ def load_status_tracker() -> dict:
             "alerts_sent_this_week": 0
         }
 
+import tempfile
+
 def save_status_tracker(tracker: dict):
+    """
+    C-07 Fix: Saves status tracker dictionary atomically to prevent file corruption.
+    """
     try:
-        os.makedirs(os.path.dirname(STATUS_TRACKER_PATH), exist_ok=True)
-        with open(STATUS_TRACKER_PATH, "w", encoding="utf-8") as f:
+        dir_name = os.path.dirname(STATUS_TRACKER_PATH)
+        os.makedirs(dir_name, exist_ok=True)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix="tracker_", suffix=".tmp")
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
             json.dump(tracker, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, STATUS_TRACKER_PATH)
     except (TypeError, OSError) as e:
         print(f"Error saving status tracker: {e}")
 

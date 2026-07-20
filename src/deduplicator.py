@@ -15,14 +15,21 @@ def load_seen_jobs(file_path: str) -> dict:
         print(f"Error loading seen_jobs database: {e}")
         return {}
 
+import tempfile
+
 def save_seen_jobs(file_path: str, data: dict):
     """
-    Saves the seen jobs dictionary back to the JSON database.
+    C-07 Fix: Saves the seen jobs dictionary atomically to prevent file corruption.
     """
     try:
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, "w", encoding="utf-8") as f:
+        dir_name = os.path.dirname(file_path)
+        os.makedirs(dir_name, exist_ok=True)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix="seen_", suffix=".tmp")
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, file_path)
     except (TypeError, OSError) as e:
         print(f"Error saving seen_jobs database: {e}")
 

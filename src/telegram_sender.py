@@ -1,6 +1,8 @@
 import requests
 import html
 import hashlib
+import time
+import traceback
 
 SPARKGEN_FOOTER = "\n\n─────────────────\nPowered by <a href='https://sparkgen.net'>SparkGen</a>"
 
@@ -24,6 +26,32 @@ def safe_callback_id(job_id: str, action: str = "applied") -> str:
     # Hash long IDs deterministically to fit 64-byte budget
     hashed_id = hashlib.md5(job_id.encode('utf-8')).hexdigest()[:32]
     return f"{prefix}{hashed_id}"
+
+def post_with_retry(url: str, json_payload: dict, max_retries: int = 3, timeout: int = 10):
+    """
+    M-01 Fix: Retries POST request on transient network errors or HTTP 429/5xx status codes
+    using exponential backoff.
+    """
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.post(url, json=json_payload, timeout=timeout)
+            if response.status_code == 200:
+                return response
+            elif response.status_code == 429:
+                retry_after = int(response.headers.get("Retry-After", 2 * attempt))
+                print(f"Telegram API 429 Rate Limited. Waiting {retry_after}s before retry {attempt}/{max_retries}...")
+                time.sleep(retry_after)
+            elif response.status_code >= 500:
+                print(f"Telegram API {response.status_code} server error. Waiting {2 ** attempt}s before retry {attempt}/{max_retries}...")
+                time.sleep(2 ** attempt)
+            else:
+                return response
+        except requests.RequestException as e:
+            if attempt == max_retries:
+                raise e
+            print(f"Network error on attempt {attempt}/{max_retries}: {e}. Retrying in {2 ** attempt}s...")
+            time.sleep(2 ** attempt)
+    return None
 
 def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: dict, profile_name: str, language: str = "ar") -> bool:
     """
@@ -146,20 +174,22 @@ Application Link: <a href="{safe_url}">Apply Now</a>{SPARKGEN_FOOTER}
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 200:
+        response = post_with_retry(url, json_payload=payload)
+        if response and response.status_code == 200:
             print("Telegram alert sent successfully.")
             return True
         else:
-            print(f"Failed to send Telegram alert: {response.text}")
+            err_text = response.text if response else "No response"
+            print(f"Failed to send Telegram alert: {err_text}")
             return False
     except Exception as e:
         print(f"Error sending Telegram alert: {e}")
+        traceback.print_exc()
         return False
 
 def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
     """
-    Sends a plain text message to Telegram.
+    Sends a plain text message to Telegram with retry support.
     """
     if not bot_token or not chat_id:
         print("Missing Telegram bot_token or chat_id. Message not sent.")
@@ -172,15 +202,17 @@ def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
         "disable_web_page_preview": True
     }
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 200:
+        response = post_with_retry(url, json_payload=payload)
+        if response and response.status_code == 200:
             print("Telegram message sent successfully.")
             return True
         else:
-            print(f"Failed to send Telegram message: {response.text}")
+            err_text = response.text if response else "No response"
+            print(f"Failed to send Telegram message: {err_text}")
             return False
     except Exception as e:
         print(f"Error sending Telegram message: {e}")
+        traceback.print_exc()
         return False
 
 if __name__ == "__main__":

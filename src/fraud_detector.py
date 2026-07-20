@@ -28,17 +28,17 @@ def analyze_job_for_fraud(job: dict) -> dict:
     """
     reasons = []
     
-    title = job.get("title", "").lower()
-    description = job.get("description", "").lower()
-    company = job.get("company", "").lower()
-    url = job.get("url", "").lower()
+    title = (job.get("title") or "").lower()
+    description = (job.get("description") or "").lower()
+    company = (job.get("company") or "").lower()
+    url = (job.get("url") or "").lower()
     
     # 1. Check age of posting (handled in main scraper but reinforced here if date is present)
     # If the date is passed as a string and we can parse it, check it.
     
-    # 2. Check Description Word Count
+    # 2. Check Description Word Count (H-08 Fix: Empty descriptions are also flagged)
     words = description.split()
-    if len(words) < FRAUD_RULES["min_description_words"] and len(words) > 0:
+    if len(words) < FRAUD_RULES["min_description_words"]:
         reasons.append(f"Description is extremely short ({len(words)} words), which is typical of low-quality ghost jobs.")
 
     # 3. Check for Spam/Scam Keywords

@@ -22,15 +22,31 @@ def safe_str(value) -> str:
         pass
     return str(value).strip()
 
+def strip_html(text: str) -> str:
+    """
+    M-12 & M-15 Fix: Purges HTML tags from job descriptions to clean text for AI prompts and fraud word counts.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    if "<" not in text and ">" not in text:
+        return text.strip()
+    try:
+        soup = BeautifulSoup(text, "html.parser")
+        return soup.get_text(separator=" ").strip()
+    except Exception:
+        return text.strip()
+
 def is_url_reliable(url: str, site: str) -> bool:
     """
     Returns False for Google session-redirect URLs that decay within hours,
-    unformatted URLs, or generic category/search index landing pages.
+    Indeed click-tracking redirect URLs, unformatted URLs, or generic category/search index landing pages.
     """
     if not url or not isinstance(url, str):
         return False
     u = url.strip().lower()
     if not (u.startswith('http://') or u.startswith('https://')):
+        return False
+    if "indeed.com/rc/clk" in u:
         return False
     if "google" in site.lower() or "google.com" in u:
         if "ibp=htl;jobs" in u or "htlcert" in u or "google.com/search" in u or "google.com/url?" in u:
@@ -141,7 +157,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                     "company": safe_str(row.get("company", "")),
                     "location": safe_str(row.get("location", "")),
                     "url": url,
-                    "description": safe_str(desc),
+                    "description": strip_html(safe_str(desc)),
                     "source": safe_str(row.get("site", "JobSpy")),
                     "date": datetime.now().isoformat()
                 })
@@ -180,13 +196,16 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
                 return jobs_list
             if isinstance(data, list) and len(data) > 1:
                 for item in data[1:]:
+                    job_url = safe_str(item.get("url", ""))
+                    if not is_url_reliable(job_url, "Remote OK"):
+                        continue
                     jobs_list.append({
                         "id": f"remoteok-{item.get('id', '')}",
-                        "title": item.get("position", ""),
-                        "company": item.get("company", ""),
+                        "title": safe_str(item.get("position", "")),
+                        "company": safe_str(item.get("company", "")),
                         "location": "Remote",
-                        "url": item.get("url", ""),
-                        "description": item.get("description", ""),
+                        "url": job_url,
+                        "description": strip_html(safe_str(item.get("description", ""))),
                         "source": "Remote OK",
                         "date": datetime.now().isoformat()
                     })
@@ -198,6 +217,7 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
 def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
     """
     H-03 Fix: Uses requests params dict for proper URL parameter encoding.
+    H-04 Fix: Content-Type validation to skip non-JSON/Cloudflare challenge pages.
     """
     jobs_list = []
     try:
@@ -206,16 +226,23 @@ def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
         response = requests.get(url, params={"search": search_term}, proxies=proxies, timeout=10)
         if response.status_code == 200:
+            content_type = response.headers.get("Content-Type", "")
+            if "json" not in content_type.lower():
+                print(f"Remotive returned non-JSON response ({content_type}). Skipping.")
+                return jobs_list
             data = response.json()
             jobs = data.get("jobs", [])
             for item in jobs:
+                job_url = safe_str(item.get("url", ""))
+                if not is_url_reliable(job_url, "Remotive"):
+                    continue
                 jobs_list.append({
                     "id": f"remotive-{item.get('id', '')}",
-                    "title": item.get("title", ""),
-                    "company": item.get("company_name", ""),
+                    "title": safe_str(item.get("title", "")),
+                    "company": safe_str(item.get("company_name", "")),
                     "location": "Remote",
-                    "url": item.get("url", ""),
-                    "description": item.get("description", ""),
+                    "url": job_url,
+                    "description": strip_html(safe_str(item.get("description", ""))),
                     "source": "Remotive",
                     "date": datetime.now().isoformat()
                 })
@@ -227,6 +254,9 @@ def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
 def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
     """
     Scrapes jobs from We Work Remotely RSS Feed.
+    H-05 Fix: Renamed inner loop url variable to job_url to prevent variable shadowing.
+    H-09 Fix: Added explicit log for non-200 HTTP response codes.
+    L-11 Fix: Stripped trailing slashes before splitting GUID to prevent ID collisions.
     """
     jobs_list = []
     try:
@@ -249,9 +279,9 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
         elif any(kw in st_lower for kw in ["business", "exec", "ceo", "operations", "finance", "legal"]):
             category = "remote-business-exec-management-jobs"
             
-        url = f"https://weworkremotely.com/categories/{category}.rss"
+        rss_url = f"https://weworkremotely.com/categories/{category}.rss"
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        response = requests.get(url, proxies=proxies, timeout=10)
+        response = requests.get(rss_url, proxies=proxies, timeout=10)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, "xml")
@@ -263,15 +293,15 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                 guid = item.find("guid").text if item.find("guid") is not None else ""
                 
                 # Prioritize direct job post link over generic category links
-                url = ""
+                job_url = ""
                 if guid and (guid.startswith("http://") or guid.startswith("https://")) and "/remote-jobs/" in guid:
-                    url = guid.strip()
+                    job_url = guid.strip()
                 elif link and (link.startswith("http://") or link.startswith("https://")) and "/remote-jobs/" in link:
-                    url = link.strip()
+                    job_url = link.strip()
                 else:
-                    url = guid.strip() if (guid and guid.strip()) else link.strip()
+                    job_url = guid.strip() if (guid and guid.strip()) else link.strip()
 
-                if not is_url_reliable(url, "We Work Remotely"):
+                if not is_url_reliable(job_url, "We Work Remotely"):
                     continue
 
                 # M-11 Fix: Word-level search so 'Product Designer' matches 'Designer, Product'
@@ -289,11 +319,11 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                         company = parts[0].strip()
                         title = parts[1].strip()
 
-                    # L-07 Fix: Deterministic fallback hash instead of random integer
+                    # L-11 Fix: Strip trailing slashes before splitting GUID/link
                     if guid and '/' in guid:
-                        raw_id = guid.split('/')[-1]
+                        raw_id = guid.strip().rstrip('/').split('/')[-1]
                     elif link and '/' in link:
-                        raw_id = link.split('/')[-1]
+                        raw_id = link.strip().rstrip('/').split('/')[-1]
                     else:
                         raw_id = hashlib.md5(f"{title}:{company}".encode()).hexdigest()[:12]
 
@@ -302,11 +332,13 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                         "title": safe_str(title),
                         "company": safe_str(company),
                         "location": "Remote",
-                        "url": url,
-                        "description": safe_str(desc),
+                        "url": job_url,
+                        "description": strip_html(safe_str(desc)),
                         "source": "We Work Remotely",
                         "date": datetime.now().isoformat()
                     })
+        else:
+            print(f"We Work Remotely returned HTTP {response.status_code}. Skipping.")
         print(f"We Work Remotely found {len(jobs_list)} jobs.")
     except Exception as e:
         print(f"Error scraping We Work Remotely: {e}")

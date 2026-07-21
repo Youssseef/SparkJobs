@@ -33,8 +33,10 @@ def load_status_tracker() -> dict:
 
 def save_status_tracker(tracker: dict):
     """
-    C-07 Fix: Saves status tracker dictionary atomically to prevent file corruption.
+    C-07 & M-08 Fix: Saves status tracker dictionary atomically to prevent file corruption,
+    and cleans up temp files on failure.
     """
+    tmp_path = None
     try:
         dir_name = os.path.dirname(STATUS_TRACKER_PATH)
         os.makedirs(dir_name, exist_ok=True)
@@ -44,16 +46,25 @@ def save_status_tracker(tracker: dict):
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_path, STATUS_TRACKER_PATH)
+        tmp_path = None
     except (TypeError, OSError) as e:
         print(f"Error saving status tracker: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 def load_config() -> dict:
     """
     Loads configuration settings.
+    L-05 Fix: Uses atomic write pattern for default config creation.
     """
     if not os.path.exists(CONFIG_PATH):
         print(f"Config file not found at {CONFIG_PATH}. Creating empty config template.")
-        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        dir_name = os.path.dirname(CONFIG_PATH)
+        os.makedirs(dir_name, exist_ok=True)
         default_config = {
             "gemini_api_key": "",
             "telegram_bot_token": "",
@@ -61,11 +72,23 @@ def load_config() -> dict:
             "scraperapi_key": "",
             "profiles": []
         }
+        tmp_path = None
         try:
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix="cfg_", suffix=".tmp")
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 json.dump(default_config, f, indent=2)
-        except OSError as e:
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, CONFIG_PATH)
+            tmp_path = None
+        except (TypeError, OSError) as e:
             print(f"Error writing default config: {e}")
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
         return default_config
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:

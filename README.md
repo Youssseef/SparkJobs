@@ -15,6 +15,15 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Zero-Assumption 55-Issue Forensic Audit & Complete Codebase Remediation (July 2026):**
+    *   **Prompt Injection Defense & Security**: Neutralized prompt injection attack vectors in `ai_matcher.py` via `sanitize_for_prompt()` and added system preambles for untrusted job descriptions. Redacted Telegram bot tokens and Gemini API keys from all exception logs and stack traces.
+    *   **Runtime Crash & Null Safety**: Fixed JSON `null` profile field crashes (`job_types`, `visa_types`), AI result `null` array handling (`pros`, `cons`, `missing_keywords`), integer coercion for string `match_score`, and `seen_jobs.json` JSON array corruption recovery.
+    *   **Scanner Guard Rails & Resource Protection**: Implemented fatal early exits for corrupted `config.json` and missing Telegram credentials to prevent silent Gemini API quota burn. Clamped Telegram alerts to 4,096 characters to prevent permanent retry loops.
+    *   **Scraper Resilience & Cleanups**: Added `Content-Type` guards to Remotive scraper, blocked Indeed `/rc/clk` expiring redirect URLs, stripped HTML tags from job descriptions, eliminated `url` variable shadowing in WeWorkRemotely scraper, and fixed GUID trailing-slash ID collisions.
+    *   **Matching & Fraud Precision**: Enforced regex word boundaries on negative role blocklists (`Salesforce Developer` vs `sales`), added language-aware word count thresholds for Arabic descriptions, and respected legacy `remote: true` config settings.
+    *   **Update Checker & Persistence Integrity**: Migrated `update_checker.py` from `urllib` to `requests`, eliminated duplicate `save_status_tracker` mid-cycle writes, added temp file unlinking on atomic write failures, and updated GitHub Actions runner to 6-hourly cron on Python 3.12.
+    *   **100% Test Suite Verification**: Expanded `test_sparkjobs_full.py` test suite covering 16 regression test cases with 100% pass rate (Exit Code 0).
+
 *   **Zero-Assumption 40-Issue Codebase Audit & Ecosystem Remediation (July 2026):**
     *   **Strict Encryption & Key Rotation**: Removed hardcoded encryption key fallbacks from `cryptoHelper.js`. Enforced `SPARKJOBS_ENCRYPTION_KEY` environment variable checks with a deterministic `enc:` prefix and executed a 100% token re-encryption migration (`reencrypt_tokens.mjs`) on all existing database records.
     *   **Network & URL Credential Protection**: Migrated ScraperAPI verification from plain `http://` to `https://`. Moved Gemini API keys from URL query parameters to `x-goog-api-key` request headers across all proxy and status routes to prevent key leakage in infrastructure and server logs.
@@ -130,7 +139,7 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 sparkjobs/
 ├── .github/workflows/
 │   ├── scan.yml        # GitHub Actions serverless cron runner configuration
-│   └── keep_alive.yml  # Daily workflow keep-alive runner
+│   └── keep_alive.yml  # Bimonthly keep-alive workflow (runs on 1st of every other month)
 ├── data/               # Local folder containing active config/CV/seen logs
 │   ├── config.json
 │   ├── seen_jobs.json

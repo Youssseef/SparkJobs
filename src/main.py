@@ -10,7 +10,7 @@ from scraper import run_all_scrapes
 from fraud_detector import analyze_job_for_fraud
 from ai_matcher import analyze_job_match
 from deduplicator import load_seen_jobs, save_seen_jobs, is_job_seen, mark_job_as_seen, cleanup_old_jobs
-from telegram_sender import send_telegram_alert, send_telegram_message, SPARKGEN_FOOTER
+from telegram_sender import send_telegram_alert, send_telegram_message, send_weekly_summary, SPARKGEN_FOOTER
 from config_loader import (
     BASE_DIR, CONFIG_PATH, SEEN_JOBS_PATH, STATUS_TRACKER_PATH, CVS_DIR, COVER_LETTER_PATH,
     load_config, load_status_tracker, save_status_tracker
@@ -58,6 +58,11 @@ def run_scanner():
     print(f"=== Starting SparkJobs Scan Cycle: {datetime.now().isoformat()} ===")
     config = load_config()
 
+    # H-02 Fix: Abort scan cycle cleanly if config.json is empty or corrupted
+    if not config:
+        print("FATAL: Config is empty or corrupted. Aborting scan cycle.")
+        return
+
     # L-05 Fix: Check for config corruption sentinel file and alert user via Telegram
     sentinel_path = os.path.join(BASE_DIR, "data", ".config_corrupted")
     if os.path.exists(sentinel_path):
@@ -82,8 +87,12 @@ def run_scanner():
     profiles = config.get("profiles", [])
     language = config.get("language", "ar")
     
+    # H-03 Fix: Early exit if bot_token or chat_id are missing to prevent silent quota burn
+    if not bot_token or not chat_id:
+        print("FATAL: Missing Telegram bot_token or chat_id. Aborting scan cycle.")
+        return
+
     tracker = load_status_tracker()
-    tracker["scans_completed_this_week"] = tracker.get("scans_completed_this_week", 0) + 1
     tracker["last_scan_time"] = datetime.now().isoformat()
 
     # Load seen_jobs database ONCE into memory at start of scan cycle
@@ -137,10 +146,15 @@ def run_scanner():
         p = profiles[0]
         for countryId in p.get("countries", []):
             if isinstance(countryId, str):
+                # H-10 & M-16 Fix: Null-safe read for job_types/visa_types & check p.get("remote")
+                job_types = p.get("job_types") or []
+                visa_types = p.get("visa_types") or []
+                is_remote = p.get("remote", False) or ("remote" in job_types)
+                requires_visa = "sponsor_required" in visa_types
                 target_countries.append({
                     "country": countryId,
-                    "remote_only": "remote" in p.get("job_types", []),
-                    "requires_visa": "sponsor_required" in p.get("visa_types", []),
+                    "remote_only": is_remote,
+                    "requires_visa": requires_visa,
                     "min_match_score": p.get("min_match_score", 65),
                     "active": p.get("active", True)
                 })
@@ -154,6 +168,9 @@ def run_scanner():
 
     active_countries = [c for c in target_countries if c.get("active", True)]
     print(f"Found {len(active_countries)} active locations out of {len(target_countries)} total locations.")
+
+    # L-02 Fix: Increment scan counter only after verifying active countries exist
+    tracker["scans_completed_this_week"] = tracker.get("scans_completed_this_week", 0) + 1
 
     scam_jobs_skipped = 0
     total_cycle_jobs = 0
@@ -197,7 +214,7 @@ def run_scanner():
                     )
             send_telegram_message(bot_token, chat_id, cv_warning_msg + SPARKGEN_FOOTER)
             tracker[tracker_key] = True
-            save_status_tracker(tracker)
+            # M-10 Fix: Removed mid-cycle save_status_tracker call (saved once at end of cycle)
         print(f"Warning: CV is {warning_type}. Running in no-CV fallback mode.")
 
     for tc in active_countries:
@@ -273,7 +290,12 @@ def run_scanner():
                         ai_result["risk_level"] = fraud_result["risk_level"]
                         ai_result["risk_reason"] = ", ".join(fraud_result["reasons"])
                     
-                    match_score = ai_result.get("match_score", 0)
+                    # H-12 Fix: Coerce match_score to integer safely
+                    try:
+                        match_score = int(ai_result.get("match_score", 0) or 0)
+                    except (ValueError, TypeError):
+                        match_score = 0
+
                     if match_score > 0:
                         match_scores.append(match_score)
                     
@@ -304,10 +326,7 @@ def run_scanner():
             print(f"Scrape completed: {new_jobs_count} new postings evaluated. {alerts_sent_count} alerts sent.")
             time.sleep(random.uniform(2.0, 4.0))
 
-    # Single persistence write to seen_jobs database at the end of scan cycle
-    seen_jobs = cleanup_old_jobs(seen_jobs)
-    save_seen_jobs(SEEN_JOBS_PATH, seen_jobs)
-    # Single persistence write to seen_jobs database at the end of scan cycle
+    # C-01 Fix: Single persistence write to seen_jobs database at the end of scan cycle
     seen_jobs = cleanup_old_jobs(seen_jobs)
     save_seen_jobs(SEEN_JOBS_PATH, seen_jobs)
 
@@ -351,42 +370,8 @@ def run_scanner():
             scam_msg = f"⚠️ <b>SparkJobs:</b> Automatically filtered and skipped {scam_jobs_skipped} suspicious/scam jobs in this scan cycle to protect your profile."
         send_telegram_message(bot_token, chat_id, scam_msg + SPARKGEN_FOOTER)
 
-    # Check if 7 days have passed since the last summary
-    try:
-        last_summary_dt = datetime.fromisoformat(tracker.get("last_summary_sent", datetime.now().isoformat()))
-        if datetime.now() - last_summary_dt >= timedelta(days=7):
-            print("Sending weekly status summary to Telegram...")
-            completed_scans = tracker.get('scans_completed_this_week', 0)
-            evaluated_jobs = tracker.get('jobs_evaluated_this_week', 0)
-            alerts_sent = tracker.get('alerts_sent_this_week', 0)
-            
-            if language == "ar":
-                summary_text = (
-                    f"<b>تقرير النشاط الأسبوعي لبوت SparkJobs</b>\n\n"
-                    f"• عمليات الفحص المكتملة: <b>{completed_scans}</b>\n"
-                    f"• الوظائف التي تم تقييمها: <b>{evaluated_jobs}</b>\n"
-                    f"• التنبيهات المرسلة: <b>{alerts_sent}</b>\n\n"
-                    f"البوت يعمل بكفاءة ويبحث عن جديد الوظائف على مدار الساعة."
-                    f"{SPARKGEN_FOOTER}"
-                )
-            else:
-                summary_text = (
-                    f"<b>SparkJobs Weekly Activity Report</b>\n\n"
-                    f"• Scans completed: <b>{completed_scans}</b>\n"
-                    f"• Jobs evaluated: <b>{evaluated_jobs}</b>\n"
-                    f"• Alerts sent: <b>{alerts_sent}</b>\n\n"
-                    f"The bot is running smoothly, scanning for new job postings 24/7."
-                    f"{SPARKGEN_FOOTER}"
-                )
-            sent = send_telegram_message(bot_token, chat_id, summary_text)
-            if sent:
-                # H-10 Fix: Reset weekly counters to start from current cycle instead of 0
-                tracker["scans_completed_this_week"] = 1
-                tracker["jobs_evaluated_this_week"] = total_cycle_jobs
-                tracker["alerts_sent_this_week"] = total_cycle_alerts
-                tracker["last_summary_sent"] = datetime.now().isoformat()
-    except Exception as e:
-        print(f"Error executing weekly summary routine: {e}")
+    # Check if 7 days have passed since the last summary (delegated helper to maintain Rule 16 <400 lines)
+    send_weekly_summary(bot_token, chat_id, tracker, total_cycle_jobs, total_cycle_alerts, language)
 
     # Check for repository/bot software updates
     check_for_updates(bot_token, chat_id, tracker, language)

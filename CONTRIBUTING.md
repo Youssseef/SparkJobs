@@ -30,6 +30,6 @@ To add a new job board or platform, follow these modular steps:
 3. **Verify Locally**:
    - Run the testing suite to verify imports and API integrity:
      ```bash
-     python src/main.py
+     python -m pytest test_sparkjobs_full.py -v
      ```
    - Verify that alerts for your new platform are correctly delivered to your Telegram chat.

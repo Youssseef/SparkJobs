@@ -6,20 +6,27 @@ from datetime import datetime, timedelta
 def load_seen_jobs(file_path: str) -> dict:
     """
     Loads the seen jobs dictionary from the JSON database file.
+    M-13 Fix: Validates root JSON is a dict to prevent array corruption crashes.
     """
     if not os.path.exists(file_path):
         return {}
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+            print(f"Warning: seen_jobs database at {file_path} root is not a dict ({type(data).__name__}). Resetting.")
+            return {}
     except (json.JSONDecodeError, OSError) as e:
         print(f"Error loading seen_jobs database: {e}")
         return {}
 
 def save_seen_jobs(file_path: str, data: dict):
     """
-    C-07 Fix: Saves the seen jobs dictionary atomically to prevent file corruption.
+    C-07 & M-08 Fix: Saves the seen jobs dictionary atomically to prevent file corruption,
+    and cleans up temp files on failure.
     """
+    tmp_path = None
     try:
         dir_name = os.path.dirname(file_path)
         os.makedirs(dir_name, exist_ok=True)
@@ -29,8 +36,15 @@ def save_seen_jobs(file_path: str, data: dict):
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_path, file_path)
+        tmp_path = None
     except (TypeError, OSError) as e:
         print(f"Error saving seen_jobs database: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 def is_job_seen(db: dict | str, job_id: str) -> bool:
     """

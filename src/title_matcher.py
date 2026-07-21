@@ -32,6 +32,8 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
     Ensures that the job title is relevant to at least one target title by verifying
     direct substring match or overlap of the target's core domain word, and checks
     against negative off-field role blocklists.
+    M-03 Fix: Uses regex word boundaries for negative role blocklist checks.
+    M-04 Fix: Skips generic filler words during domain core matching.
     """
     if not target_titles or not job_title:
         return True
@@ -41,7 +43,7 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
 
     # 0. Negative role blocklist check: discard off-field jobs unless explicitly targeted
     for neg_word in NEGATIVE_ROLE_BLOCKLIST:
-        if neg_word in job_lower and neg_word not in combined_targets:
+        if re.search(rf'\b{re.escape(neg_word)}\b', job_lower) and neg_word not in combined_targets:
             return False
     
     for target in target_titles:
@@ -53,7 +55,7 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
             
         # 2. Domain core word matching (stops cross-field contamination, e.g. Frontend vs DevOps)
         core = get_role_core(target_lower, FILLERS)
-        if core and core in job_lower:
+        if core and core not in FILLERS and core in job_lower:
             return True
             
     return False

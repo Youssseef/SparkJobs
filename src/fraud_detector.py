@@ -40,9 +40,11 @@ def analyze_job_for_fraud(job: dict) -> dict:
     # 1. Check age of posting (handled in main scraper but reinforced here if date is present)
     # If the date is passed as a string and we can parse it, check it.
     
-    # 2. Check Description Word Count (H-08 Fix: Empty descriptions are also flagged)
+    # 2. Check Description Word Count (M-05 Fix: Language-aware threshold for concise Arabic text)
     words = description.split()
-    if len(words) < FRAUD_RULES["min_description_words"]:
+    is_arabic = bool(re.search(r'[\u0600-\u06FF]', description + " " + title))
+    min_words = FRAUD_RULES["min_description_words"] // 2 if is_arabic else FRAUD_RULES["min_description_words"]
+    if len(words) < min_words:
         reasons.append(f"Description is extremely short ({len(words)} words), which is typical of low-quality ghost jobs.")
 
     # 3. Check for Spam/Scam Keywords

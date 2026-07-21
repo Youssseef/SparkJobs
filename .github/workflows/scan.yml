@@ -2,7 +2,7 @@ name: SparkJobs Scanner
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '0 */6 * * *' # Runs 4x/day (within GitHub Actions free tier budget)
   workflow_dispatch: # Allows manual trigger
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Use stable python in Github Actions environment
+          python-version: '3.12'
           cache: 'pip'
 
       - name: Install Dependencies

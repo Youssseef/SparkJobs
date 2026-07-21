@@ -1,15 +1,16 @@
 import os
 import json
-import urllib.request
-import urllib.error
 import hashlib
+import requests
 from telegram_sender import send_telegram_message, SPARKGEN_FOOTER
-from config_loader import BASE_DIR, save_status_tracker
+from config_loader import BASE_DIR
 
 def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str):
     """
     Checks the remote template repository for new releases or main updates
     by comparing git hash objects. Sends a single Telegram alert if an update is found.
+    M-06 Fix: Migrated from urllib to requests.
+    C-02 Fix: Removed mid-cycle save_status_tracker call (main.py saves tracker at cycle end).
     """
     try:
         main_py_path = os.path.join(BASE_DIR, "src", "main.py")
@@ -34,10 +35,12 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
         if github_token:
             headers['Authorization'] = f'token {github_token}'
             
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=5) as response:
-            meta = json.loads(response.read().decode('utf-8'))
-            template_sha = meta.get("sha", "")
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code != 200:
+            return
+            
+        meta = response.json()
+        template_sha = meta.get("sha", "")
             
         if template_sha and local_sha != template_sha:
             if tracker.get("last_update_alert_sha") != template_sha:
@@ -59,6 +62,5 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
                 sent = send_telegram_message(bot_token, chat_id, alert_msg)
                 if sent:
                     tracker["last_update_alert_sha"] = template_sha
-                    save_status_tracker(tracker)
     except Exception as update_err:
         print(f"Failed to check for template updates (non-blocking): {update_err}")

@@ -81,7 +81,10 @@ def anonymize_cv_text(text: str) -> str:
     # 4. Strip top headers
     lines = text.split('\n')
     anonymized_lines = []
-    location_keywords = ['location', 'address', 'street', 'city', 'country', 'zip', 'road', 'state']
+    location_keywords = [
+        'location', 'address', 'street', 'city', 'country', 'zip', 'road', 'state',
+        'عنوان', 'العنوان', 'المدينة', 'الدولة', 'الحي', 'الشارع', 'المنطقة', 'المنزل'
+    ]
     
     non_empty_count = 0
     for line in lines:
@@ -93,10 +96,10 @@ def anonymize_cv_text(text: str) -> str:
         non_empty_count += 1
         contains_location = any(kw in cleaned_line.lower() for kw in location_keywords)
         
-        if non_empty_count <= 3 and len(cleaned_line) < 50:
-            anonymized_lines.append('[ANONYMIZED_HEADER_LINE]')
-        elif contains_location:
+        if contains_location:
             anonymized_lines.append('[ANONYMIZED_LOCATION_LINE]')
+        elif non_empty_count <= 3 and len(cleaned_line) < 50:
+            anonymized_lines.append('[ANONYMIZED_HEADER_LINE]')
         else:
             anonymized_lines.append(line)
 
@@ -104,9 +107,9 @@ def anonymize_cv_text(text: str) -> str:
 
 if __name__ == "__main__":
     dummy_cv = """
-    Youssef Wael
-    Senior Software Engineer | Cairo, Egypt
-    Phone: +20 123 456 7890 | Email: youssef@sparkgen.net | LinkedIn: https://linkedin.com/in/youssef
+    Alex Morgan
+    Senior Software Engineer | San Francisco, USA
+    Phone: +1 555 019 2831 | Email: candidate@example.com | LinkedIn: https://linkedin.com/in/example
     """
     print("Anonymized CV check:")
     print(anonymize_cv_text(dummy_cv))

@@ -3,15 +3,5 @@
   "telegram_bot_token": "",
   "telegram_chat_id": "",
   "scraperapi_key": "",
-  "profiles": [
-    {
-      "name": "React Developer Europe",
-      "job_titles": ["React Developer", "Frontend Engineer"],
-      "countries": ["Germany", "Netherlands"],
-      "remote": true,
-      "min_match_score": 65,
-      "cv_version": "default_cv",
-      "active": true
-    }
-  ]
+  "profiles": []
 }

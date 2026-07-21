@@ -3,6 +3,7 @@ import html
 import hashlib
 import time
 import traceback
+from datetime import datetime, timedelta
 
 SPARKGEN_FOOTER = "\n\n─────────────────\nPowered by <a href='https://sparkgen.net'>SparkGen</a>"
 
@@ -38,7 +39,10 @@ def post_with_retry(url: str, json_payload: dict, max_retries: int = 3, timeout:
             if response.status_code == 200:
                 return response
             elif response.status_code == 429:
-                retry_after = int(response.headers.get("Retry-After", 2 * attempt))
+                try:
+                    retry_after = int(response.headers.get("Retry-After", 2 * attempt))
+                except (ValueError, TypeError):
+                    retry_after = 2 * attempt
                 print(f"Telegram API 429 Rate Limited. Waiting {retry_after}s before retry {attempt}/{max_retries}...")
                 time.sleep(retry_after)
             elif response.status_code >= 500:
@@ -48,7 +52,8 @@ def post_with_retry(url: str, json_payload: dict, max_retries: int = 3, timeout:
                 return response
         except requests.RequestException as e:
             if attempt == max_retries:
-                raise e
+                print(f"Network error on final attempt {attempt}/{max_retries}. Request failed.")
+                return None
             print(f"Network error on attempt {attempt}/{max_retries}: {e}. Retrying in {2 ** attempt}s...")
             time.sleep(2 ** attempt)
     return None
@@ -82,15 +87,19 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     if risk_reason:
         safety_badge += f"\n   <i>└ {escape_html(risk_reason)}</i>"
 
-    # 2. Extract job metrics
+    # 2. Extract job metrics (H-11 Fix: null safety for arrays/strings)
     match_score = ai_analysis.get("match_score", 0)
-    estimated_salary = ai_analysis.get("estimated_salary", "غير محدد" if language == "ar" else "Not specified")
-    pros = "\n".join([f"• {escape_html(p)}" for p in ai_analysis.get("pros", [])])
-    cons = "\n".join([f"• {escape_html(c)}" for c in ai_analysis.get("cons", [])])
-    missing = ", ".join([escape_html(m) for m in ai_analysis.get("missing_keywords", [])])
+    estimated_salary = ai_analysis.get("estimated_salary") or ("غير محدد" if language == "ar" else "Not specified")
+    pros_list = ai_analysis.get("pros") or []
+    cons_list = ai_analysis.get("cons") or []
+    missing_list = ai_analysis.get("missing_keywords") or []
+    
+    pros = "\n".join([f"• {escape_html(p)}" for p in pros_list])
+    cons = "\n".join([f"• {escape_html(c)}" for c in cons_list])
+    missing = ", ".join([escape_html(m) for m in missing_list])
 
     # 3. Format outreach message
-    outreach = ai_analysis.get("outreach_message", "")
+    outreach = ai_analysis.get("outreach_message") or ""
     
     if language == "ar":
         pros_section = f"\n<b>✅ نقاط القوة:</b>\n{pros}" if pros else ""
@@ -149,6 +158,15 @@ Recruiter Outreach Message:
 Application Link: <a href="{safe_url}">Apply Now</a>{SPARKGEN_FOOTER}
 """
 
+    # H-08 Fix: Telegram 4096 character limit guard
+    MAX_TG_LENGTH = 4096
+    if len(message.encode('utf-8')) > MAX_TG_LENGTH:
+        if len(outreach) > 300:
+            truncated_outreach = outreach[:300] + "..."
+            message = message.replace(escape_html(outreach), escape_html(truncated_outreach))
+        if len(message.encode('utf-8')) > MAX_TG_LENGTH:
+            message = message[:4050] + "\n...\n" + SPARKGEN_FOOTER
+
     btn_applied = "تم التقديم ✅" if language == "ar" else "Applied ✅"
     btn_ignore = "تجاهل ❌" if language == "ar" else "Ignore ❌"
     
@@ -183,8 +201,8 @@ Application Link: <a href="{safe_url}">Apply Now</a>{SPARKGEN_FOOTER}
             print(f"Failed to send Telegram alert: {err_text}")
             return False
     except Exception as e:
-        print(f"Error sending Telegram alert: {e}")
-        traceback.print_exc()
+        sanitized_err = str(e).replace(bot_token, "[REDACTED]") if bot_token else str(e)
+        print(f"Error sending Telegram alert: {sanitized_err}")
         return False
 
 def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
@@ -211,9 +229,50 @@ def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
             print(f"Failed to send Telegram message: {err_text}")
             return False
     except Exception as e:
-        print(f"Error sending Telegram message: {e}")
-        traceback.print_exc()
+        sanitized_err = str(e).replace(bot_token, "[REDACTED]") if bot_token else str(e)
+        print(f"Error sending Telegram message: {sanitized_err}")
         return False
+
+def send_weekly_summary(bot_token: str, chat_id: str, tracker: dict, total_cycle_jobs: int, total_cycle_alerts: int, language: str = "ar") -> bool:
+    """
+    Checks if 7 days have passed since the last weekly report and dispatches a summary to Telegram.
+    """
+    try:
+        last_summary_dt = datetime.fromisoformat(tracker.get("last_summary_sent", datetime.now().isoformat()))
+        if datetime.now() - last_summary_dt >= timedelta(days=7):
+            print("Sending weekly status summary to Telegram...")
+            completed_scans = tracker.get('scans_completed_this_week', 0)
+            evaluated_jobs = tracker.get('jobs_evaluated_this_week', 0)
+            alerts_sent = tracker.get('alerts_sent_this_week', 0)
+            
+            if language == "ar":
+                summary_text = (
+                    f"<b>تقرير النشاط الأسبوعي لبوت SparkJobs</b>\n\n"
+                    f"• عمليات الفحص المكتملة: <b>{completed_scans}</b>\n"
+                    f"• الوظائف التي تم تقييمها: <b>{evaluated_jobs}</b>\n"
+                    f"• التنبيهات المرسلة: <b>{alerts_sent}</b>\n\n"
+                    f"البوت يعمل بكفاءة ويبحث عن جديد الوظائف على مدار الساعة."
+                    f"{SPARKGEN_FOOTER}"
+                )
+            else:
+                summary_text = (
+                    f"<b>SparkJobs Weekly Activity Report</b>\n\n"
+                    f"• Scans completed: <b>{completed_scans}</b>\n"
+                    f"• Jobs evaluated: <b>{evaluated_jobs}</b>\n"
+                    f"• Alerts sent: <b>{alerts_sent}</b>\n\n"
+                    f"The bot is running smoothly, scanning for new job postings 24/7."
+                    f"{SPARKGEN_FOOTER}"
+                )
+            sent = send_telegram_message(bot_token, chat_id, summary_text)
+            if sent:
+                tracker["scans_completed_this_week"] = 1
+                tracker["jobs_evaluated_this_week"] = total_cycle_jobs
+                tracker["alerts_sent_this_week"] = total_cycle_alerts
+                tracker["last_summary_sent"] = datetime.now().isoformat()
+                return True
+    except Exception as e:
+        print(f"Error executing weekly summary routine: {e}")
+    return False
 
 if __name__ == "__main__":
     dummy_job = {

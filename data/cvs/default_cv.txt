@@ -1,25 +1,2 @@
-Candidate Name: Alex Morgan
-Title: Senior Software Engineer
-Email: candidate@example.com
-Location: Remote
-
-Professional Summary:
-Experienced Software Engineer with 5+ years of background in building web applications, scalable backends, and user-centric interfaces. Proficient in JavaScript, TypeScript, Python, React, and Node.js.
-
-Key Skills:
-- Frontend: React, TypeScript, HTML5, CSS3, Tailwind CSS
-- Backend: Node.js, Express, Python, RESTful APIs
-- Database & Cloud: PostgreSQL, Supabase, AWS, Docker
-- Testing & Tools: Git, GitHub Actions, CI/CD, Jest
-
-Experience:
-Senior Frontend Engineer | Tech Corp (2022 - Present)
-- Designed and maintained component systems for high-traffic SaaS applications.
-- Optimized performance, reducing initial load times by 35%.
-
-Software Developer | Dev Studio (2019 - 2022)
-- Built scalable web features using React and Node.js.
-- Collaborated with cross-functional teams to deliver client solutions.
-
-Education:
-B.S. in Computer Science | State University
+[DEFAULT CV PLACEHOLDER]
+Please upload your resume (.pdf or .docx) via the SparkGen Admin Dashboard settings to enable AI match scoring.

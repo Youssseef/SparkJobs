@@ -30,6 +30,6 @@ To add a new job board or platform, follow these modular steps:
 3. **Verify Locally**:
    - Run the testing suite to verify imports and API integrity:
      ```bash
-     venv/Scripts/python src/main.py
+     python src/main.py
      ```
    - Verify that alerts for your new platform are correctly delivered to your Telegram chat.

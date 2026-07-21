@@ -1,5 +1,6 @@
 import os
 import json
+import tempfile
 from datetime import datetime, timedelta
 
 def load_seen_jobs(file_path: str) -> dict:
@@ -14,8 +15,6 @@ def load_seen_jobs(file_path: str) -> dict:
     except (json.JSONDecodeError, OSError) as e:
         print(f"Error loading seen_jobs database: {e}")
         return {}
-
-import tempfile
 
 def save_seen_jobs(file_path: str, data: dict):
     """
@@ -33,7 +32,7 @@ def save_seen_jobs(file_path: str, data: dict):
     except (TypeError, OSError) as e:
         print(f"Error saving seen_jobs database: {e}")
 
-def is_job_seen(db: [dict, str], job_id: str) -> bool:
+def is_job_seen(db: dict | str, job_id: str) -> bool:
     """
     Checks if a job_id has been seen before.
     Supports either a pre-loaded dict (in-memory fast path) or a file path string.
@@ -43,7 +42,7 @@ def is_job_seen(db: [dict, str], job_id: str) -> bool:
     seen_jobs = load_seen_jobs(db)
     return job_id in seen_jobs
 
-def mark_job_as_seen(db: [dict, str], job_id: str, title: str, company: str):
+def mark_job_as_seen(db: dict | str, job_id: str, title: str, company: str):
     """
     Saves a job_id with metadata and current timestamp to the seen jobs database.
     Supports mutating an in-memory dict or disk persistence.
@@ -64,7 +63,7 @@ def mark_job_as_seen(db: [dict, str], job_id: str, title: str, company: str):
     }
     save_seen_jobs(db, seen_jobs)
 
-def cleanup_old_jobs(db: [dict, str], days_to_keep: int = 30) -> dict:
+def cleanup_old_jobs(db: dict | str, days_to_keep: int = 30) -> dict:
     """
     Prunes the database, deleting entries older than the retention limit (default 30 days)
     to prevent file size bloat.

@@ -7,7 +7,11 @@ FRAUD_RULES = {
         r"whatsapp", r"telegram", r"urgent hiring", r"no experience needed",
         r"work from home \$?\d+,?\d*", r"deposit", r"pay fee", r"training fee",
         r"package envelope", r"secret shopper", r"mystery shopper",
-        r"immediate start", r"no cv required", r"contact on whatsapp"
+        r"immediate start", r"no cv required", r"contact on whatsapp",
+        # M-04 Fix: Arabic spam keywords for Gulf / MENA job board scams
+        r"واتساب", r"تيليجرام", r"مطلوب فوراً", r"بدون خبرة",
+        r"رسوم تدريب", r"عمولة فقط", r"ارسل cv على واتس",
+        r"تواصل واتساب", r"لا يشترط خبرة", r"من المنزل"
     ],
     "suspicious_email_domains": [
         "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com", "mail.ru", "yandex.ru"
@@ -56,8 +60,9 @@ def analyze_job_for_fraud(job: dict) -> dict:
         if domain.lower() in FRAUD_RULES["suspicious_email_domains"]:
             reasons.append(f"Asks to apply or contact via a free email address (@{domain}) instead of a corporate domain.")
 
-    # 5. Check for suspicious company names
-    if not company or company.strip() in ["", "na", "n/a", "unknown", "confidential"]:
+    # 5. Check for suspicious company names (English & Arabic placeholders)
+    suspicious_companies = ["", "na", "n/a", "unknown", "confidential", "غير محدد", "سرية", "غير متاح", "بدون اسم"]
+    if not company or company.strip() in suspicious_companies:
         reasons.append("Company name is confidential or not provided, commonly used for ghost jobs or data harvesting.")
 
     # 6. Check for WhatsApp/Telegram link patterns
@@ -68,7 +73,8 @@ def analyze_job_for_fraud(job: dict) -> dict:
     high_risk_signals = [
         "free email address",
         "chat on Telegram or WhatsApp",
-        "deposit", "pay fee", "training fee", "whatsapp", "telegram", "contact on whatsapp"
+        "deposit", "pay fee", "training fee", "whatsapp", "telegram", "contact on whatsapp",
+        "واتساب", "تيليجرام", "رسوم تدريب", "عمولة فقط"
     ]
     
     risk_level = "Low"

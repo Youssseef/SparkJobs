@@ -1,22 +1,25 @@
-Youssef Wael
-Cairo, Egypt
-youssef@sparkgen.net | +20 100 000 0000 | https://github.com/youssef
+Candidate Name: Alex Morgan
+Title: Senior Software Engineer
+Email: candidate@example.com
+Location: Remote
 
-PROFESSIONAL SUMMARY
-Passionate Frontend Developer with 3+ years of experience building modern user interfaces using React, JavaScript, and TypeScript. Expert in responsive web design, state management, and modern styling libraries like TailwindCSS.
+Professional Summary:
+Experienced Software Engineer with 5+ years of background in building web applications, scalable backends, and user-centric interfaces. Proficient in JavaScript, TypeScript, Python, React, and Node.js.
 
-TECHNICAL SKILLS
-- Frontend: React, JavaScript, TypeScript, HTML5, CSS3, Redux, Context API
-- Styling: TailwindCSS, CSS Modules, Styled Components
-- Tools: Git, GitHub, VS Code, Figma
-- Methodologies: Agile, Scrum, Responsive Web Design
+Key Skills:
+- Frontend: React, TypeScript, HTML5, CSS3, Tailwind CSS
+- Backend: Node.js, Express, Python, RESTful APIs
+- Database & Cloud: PostgreSQL, Supabase, AWS, Docker
+- Testing & Tools: Git, GitHub Actions, CI/CD, Jest
 
-EXPERIENCE
-Frontend Developer | SparkGen | 2024 - Present
-- Built and maintained responsive React interfaces for the SparkGen Admin Dashboard.
-- Integrated RESTful APIs and optimized state synchronization using custom hooks.
-- Refactored legacy modular codebases, maintaining strict anti-god-component architectures.
+Experience:
+Senior Frontend Engineer | Tech Corp (2022 - Present)
+- Designed and maintained component systems for high-traffic SaaS applications.
+- Optimized performance, reducing initial load times by 35%.
 
-Junior React Developer | Freelance | 2023 - 2024
-- Developed responsive landing pages and simple web applications for local clients.
-- Collaborated with UI/UX designers on Figma to translate wireframes into interactive code.
+Software Developer | Dev Studio (2019 - 2022)
+- Built scalable web features using React and Node.js.
+- Collaborated with cross-functional teams to deliver client solutions.
+
+Education:
+B.S. in Computer Science | State University

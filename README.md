@@ -15,7 +15,15 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
-*   **Security Hardening, 35-Issue Audit Remediation & Modular Architecture (July 2026):**
+*   **Zero-Assumption 40-Issue Codebase Audit & Ecosystem Remediation (July 2026):**
+    *   **Strict Encryption & Key Rotation**: Removed hardcoded encryption key fallbacks from `cryptoHelper.js`. Enforced `SPARKJOBS_ENCRYPTION_KEY` environment variable checks with a deterministic `enc:` prefix and executed a 100% token re-encryption migration (`reencrypt_tokens.mjs`) on all existing database records.
+    *   **Network & URL Credential Protection**: Migrated ScraperAPI verification from plain `http://` to `https://`. Moved Gemini API keys from URL query parameters to `x-goog-api-key` request headers across all proxy and status routes to prevent key leakage in infrastructure and server logs.
+    *   **Proxy Security & Path Traversal Guards**: Enforced `requireAuth` on `/setup/telegram-me` proxy endpoint to prevent open token verification abuse. Added `isValidRepoName()` validation across all setup and wizard routes to eliminate SSRF and path traversal attack vectors.
+    *   **Fail-Closed Webhook Security**: Hardened Telegram webhook receivers to fail-closed, rejecting incoming requests when `webhook_secret` is missing on the user record or mismatched in headers. Applied a Supabase database migration adding all missing user preference and secret columns.
+    *   **Arabic Fraud & Scam Detection**: Expanded `fraud_detector.py` with Arabic scam keyword patterns (`واتساب`, `رسوم تدريب`, `مطلوب فوراً`) and Arabic company name placeholders (`غير محدد`, `سرية`), ensuring high-risk scam escalation for MENA/Gulf job board listings.
+    *   **Scraper Stability & Word-Level Matching**: Added `Content-Type` checks to Remote OK scraper to handle Cloudflare 200 OK HTML challenges gracefully. Upgraded WeWorkRemotely scraper to word-level search matching (`Product Designer` matching `Designer, Product`).
+    *   **Dependency Completeness & Rule 16 Cleanups**: Added `requests`, `beautifulsoup4`, `lxml`, and `pandas` explicitly to `requirements.txt`. Extracted `getWebhookStrings` to `webhookTranslations.js` and decomposed `setupRoutes.js` into `wizardRoutes.js` + `setupRoutes.js` to keep 100% of files well under the 400-line limit.
+    *   **Expanded Test Coverage**: Extended `test_sparkjobs_full.py` unit test suite to cover scraper utilities, config loader error handlers, and Arabic fraud detection routines (10/10 tests passing).
     *   **AES-256-GCM Token Encryption**: Implemented `cryptoHelper.js` to encrypt all GitHub Personal Access Tokens at rest in Supabase, preventing plain-text credential leaks on database compromise.
     *   **XXE Protection**: Replaced `xml.etree.ElementTree` in `cv_processor.py` with `defusedxml.ElementTree` to prevent XML External Entity and Billion Laughs vulnerabilities.
     *   **Telegram Webhook Authentication & Rate-Limiting**: Enforced `X-Telegram-Bot-Api-Secret-Token` validation and `jobsLimiter` rate-limiting on all webhook endpoints, securing against unauthorized command execution.
@@ -121,15 +129,26 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ```text
 sparkjobs/
 ├── .github/workflows/
-│   └── scan.yml        # GitHub Actions serverless cron runner configuration
+│   ├── scan.yml        # GitHub Actions serverless cron runner configuration
+│   └── keep_alive.yml  # Daily workflow keep-alive runner
 ├── data/               # Local folder containing active config/CV/seen logs
 │   ├── config.json
-│   └── status_tracker.json
+│   ├── seen_jobs.json
+│   ├── status_tracker.json
+│   └── cvs/
+│       └── default_cv.txt
 ├── src/                # Python scraper, matcher, and alert bot scripts
+│   ├── __init__.py
 │   ├── ai_matcher.py
+│   ├── config_loader.py
+│   ├── cv_processor.py
+│   ├── deduplicator.py
+│   ├── fraud_detector.py
 │   ├── main.py
 │   ├── scraper.py
-│   └── telegram_bot.py
+│   ├── telegram_sender.py
+│   ├── title_matcher.py
+│   └── update_checker.py
 ├── requirements.txt    # Python dependencies manifest
 └── README.md           # Master documentation (this file)
 ```
@@ -161,11 +180,6 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Run scan cycle
-python src/main.py
-```
-pip install -r requirements.txt
-
-# Configure data/config.json with keys, then execute
 python src/main.py
 ```
 

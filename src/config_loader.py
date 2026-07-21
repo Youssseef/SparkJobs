@@ -1,5 +1,6 @@
 import os
 import json
+import tempfile
 from datetime import datetime
 
 # Paths definition
@@ -29,8 +30,6 @@ def load_status_tracker() -> dict:
             "jobs_evaluated_this_week": 0,
             "alerts_sent_this_week": 0
         }
-
-import tempfile
 
 def save_status_tracker(tracker: dict):
     """
@@ -73,4 +72,11 @@ def load_config() -> dict:
             return json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         print(f"Error loading config: {e}")
+        # L-05 Fix: Flag config corruption via sentinel file so scanner can notify Telegram
+        try:
+            sentinel_path = os.path.join(os.path.dirname(CONFIG_PATH), ".config_corrupted")
+            with open(sentinel_path, "w") as sf:
+                sf.write(str(e))
+        except Exception:
+            pass
         return {}

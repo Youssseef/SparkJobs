@@ -2,7 +2,9 @@ import os
 import json
 import random
 import time
+from collections import Counter
 from datetime import datetime, timedelta
+import requests
 from cv_processor import extract_text_from_pdf, extract_text_from_docx
 from scraper import run_all_scrapes
 from fraud_detector import analyze_job_for_fraud
@@ -55,7 +57,20 @@ def run_scanner():
     """
     print(f"=== Starting SparkJobs Scan Cycle: {datetime.now().isoformat()} ===")
     config = load_config()
-    
+
+    # L-05 Fix: Check for config corruption sentinel file and alert user via Telegram
+    sentinel_path = os.path.join(BASE_DIR, "data", ".config_corrupted")
+    if os.path.exists(sentinel_path):
+        try:
+            bot_tok = config.get("telegram_bot_token", "") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+            c_id = config.get("telegram_chat_id", "") or os.environ.get("TELEGRAM_CHAT_ID", "")
+            if bot_tok and c_id:
+                err_msg = "⚠️ <b>SparkJobs Alert:</b> Your `data/config.json` file appears corrupted or invalid JSON. Scanning aborted to prevent unpredictable behavior. Please check your settings in the dashboard."
+                send_telegram_message(bot_tok, c_id, err_msg + SPARKGEN_FOOTER)
+            os.remove(sentinel_path)
+        except Exception as alert_err:
+            print(f"Error handling corrupted config alert: {alert_err}")
+
     if config.get("paused", False):
         print("Bot is currently paused. Exiting scan cycle.")
         return
@@ -292,13 +307,12 @@ def run_scanner():
     # Single persistence write to seen_jobs database at the end of scan cycle
     seen_jobs = cleanup_old_jobs(seen_jobs)
     save_seen_jobs(SEEN_JOBS_PATH, seen_jobs)
-    save_status_tracker(tracker)
+    # Single persistence write to seen_jobs database at the end of scan cycle
+    seen_jobs = cleanup_old_jobs(seen_jobs)
+    save_seen_jobs(SEEN_JOBS_PATH, seen_jobs)
 
     # Report Aggregated Telemetry Ping
     try:
-        from collections import Counter
-        import requests
-        
         top_kws = [kw for kw, _ in Counter(all_missing_keywords).most_common(10)]
         top_sources = [{"source": s, "count": c} for s, c in job_sources_count.items()]
         avg_score = round(sum(match_scores) / len(match_scores), 2) if match_scores else 0
@@ -366,15 +380,19 @@ def run_scanner():
                 )
             sent = send_telegram_message(bot_token, chat_id, summary_text)
             if sent:
-                tracker["scans_completed_this_week"] = 0
-                tracker["jobs_evaluated_this_week"] = 0
-                tracker["alerts_sent_this_week"] = 0
+                # H-10 Fix: Reset weekly counters to start from current cycle instead of 0
+                tracker["scans_completed_this_week"] = 1
+                tracker["jobs_evaluated_this_week"] = total_cycle_jobs
+                tracker["alerts_sent_this_week"] = total_cycle_alerts
                 tracker["last_summary_sent"] = datetime.now().isoformat()
-                save_status_tracker(tracker)
     except Exception as e:
         print(f"Error executing weekly summary routine: {e}")
 
+    # Check for repository/bot software updates
     check_for_updates(bot_token, chat_id, tracker, language)
+
+    # Consolidated single save for tracker state at end of cycle (M-02, M-10)
+    save_status_tracker(tracker)
 
     print("=== Scan Cycle Completed ===")
 

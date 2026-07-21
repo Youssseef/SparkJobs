@@ -168,7 +168,16 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
         response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
         
         if response.status_code == 200:
-            data = response.json()
+            # M-05 Fix: Guard against Cloudflare HTML challenge pages returning 200 OK
+            content_type = response.headers.get("Content-Type", "")
+            if "json" not in content_type.lower():
+                print(f"Remote OK returned non-JSON response ({content_type}). Skipping.")
+                return jobs_list
+            try:
+                data = response.json()
+            except Exception as json_err:
+                print(f"Failed to parse Remote OK JSON response: {json_err}")
+                return jobs_list
             if isinstance(data, list) and len(data) > 1:
                 for item in data[1:]:
                     jobs_list.append({
@@ -265,7 +274,15 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                 if not is_url_reliable(url, "We Work Remotely"):
                     continue
 
-                if search_term.lower() in title.lower() or search_term.lower() in desc.lower():
+                # M-11 Fix: Word-level search so 'Product Designer' matches 'Designer, Product'
+                search_words = [w.lower() for w in search_term.split() if len(w) > 2]
+                title_lower = title.lower()
+                desc_lower = desc.lower()
+                is_match = (
+                    search_term.lower() in title_lower or search_term.lower() in desc_lower or
+                    (search_words and all(w in title_lower or w in desc_lower for w in search_words))
+                )
+                if is_match:
                     company = "WeWorkRemotely"
                     if ":" in title:
                         parts = title.split(":", 1)

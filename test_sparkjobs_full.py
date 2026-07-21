@@ -10,6 +10,8 @@ from deduplicator import is_job_seen, mark_job_as_seen, cleanup_old_jobs
 from telegram_sender import safe_callback_id, escape_html
 from ai_matcher import clean_json_response
 from fraud_detector import analyze_job_for_fraud
+from scraper import safe_str, is_url_reliable
+from config_loader import load_config, load_status_tracker
 
 class TestSparkJobsSuite(unittest.TestCase):
 
@@ -74,6 +76,28 @@ class TestSparkJobsSuite(unittest.TestCase):
         res = analyze_job_for_fraud(clean_job)
         self.assertFalse(res["is_suspicious"])
         self.assertEqual(res["risk_level"], "Low")
+
+    # L-03 Fix: Tests for scraper utilities, config loader, and Arabic fraud detection
+    def test_scraper_safe_str(self):
+        self.assertEqual(safe_str("Hello World"), "Hello World")
+        self.assertEqual(safe_str(None), "")
+        self.assertEqual(safe_str(float('nan')), "")
+
+    def test_is_url_reliable(self):
+        self.assertTrue(is_url_reliable("https://linkedin.com/jobs/view/123", "LinkedIn"))
+        self.assertFalse(is_url_reliable("https://google.com/url?q=http://bad.com", "Google Jobs"))
+        self.assertFalse(is_url_reliable("https://weworkremotely.com/categories/remote-dev-jobs", "We Work Remotely"))
+
+    def test_arabic_fraud_keywords(self):
+        arabic_scam_job = {
+            "title": "مطلوب فوراً موظف إدخال بيانات",
+            "description": "عمل من المنزل براتب مجزي جداً بدون خبرة. تواصل معنا فوراً على واتساب لإرسال الـ CV ورسوم التسجيل.",
+            "company": "غير محدد",
+            "url": "https://example.com"
+        }
+        res = analyze_job_for_fraud(arabic_scam_job)
+        self.assertTrue(res["is_suspicious"])
+        self.assertEqual(res["risk_level"], "High")
 
 if __name__ == "__main__":
     unittest.main()

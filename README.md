@@ -15,7 +15,10 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
-*   **On-Demand Telegram Search & Two-Phase Auto-Apply Engine — Phase 1 & 2 (July 2026):**
+*   **Python Module Path Resolution & Workflow Working Directory Hardening (July 2026):**
+    *   **Universal Module Import Path Fallback**: Inserted `sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))` at the top of `src/main.py` and `src/auto_apply.py`. This guarantees peer module imports (`cv_loader`, `scraper`, `ai_matcher`, `telegram_sender`) resolve seamlessly regardless of whether Python is executed from repo root (`python src/main.py`) or `src/` directory.
+    *   **GitHub Actions Working Directory**: Updated `.github/workflows/scan.yml`, `analyze_form.yml`, and `submit_application.yml` to switch into `src/` before invoking Python scripts (`cd src && python main.py`).
+    *   **Concurrent Push Rebase Loop**: Added automated `for i in 1 2 3; do git pull --rebase ...` retry loop in `scan.yml` commit step to seamlessly handle concurrent state commits made via admin dashboard while long scans run.
     *   **Telegram `/search` Command (Phase 1)**: Added async on-demand search matching terms across title, company, location with immediately-responding backend webhook to respect Telegram's 5s deadline. Included human-readable age formatting and stale-bot status flags.
     *   **Two-Tier ATS & Auto-Apply (Phase 2)**: Built Playwright browser automation script `auto_apply.py` executing two-tier ATS domain/DOM fingerprinting (Lever, Greenhouse, SmartRecruiters) and page traversal.
     *   **Gemini Cover Letter Personalization**: Coupled Gemini model content generation with the analyze flow to personalize cover letter contents dynamically on scan.

@@ -43,7 +43,9 @@ jobs:
         run: python -m playwright install chromium --with-deps
 
       - name: Run Form Analyzer
-        run: python src/auto_apply.py --mode=analyze --url="${{ github.event.inputs.job_url }}"
+        run: |
+          cd src
+          python auto_apply.py --mode=analyze --url="${{ github.event.inputs.job_url }}"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

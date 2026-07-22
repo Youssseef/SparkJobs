@@ -43,7 +43,9 @@ jobs:
         run: python -m playwright install chromium --with-deps
 
       - name: Submit Application
-        run: python src/auto_apply.py --mode=submit --url="${{ github.event.inputs.job_url }}"
+        run: |
+          cd src
+          python auto_apply.py --mode=submit --url="${{ github.event.inputs.job_url }}"
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

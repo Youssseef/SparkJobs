@@ -50,6 +50,7 @@ jobs:
           git add data/seen_jobs.json data/status_tracker.json data/jobs_history.json
           if ! git diff --staged --quiet; then
             git commit -m "update: bot state $(date +'%Y-%m-%d %H:%M')"
-            git pull --rebase origin ${GITHUB_REF_NAME:-master}
-            git push origin HEAD:${GITHUB_REF_NAME:-master}
+            for i in 1 2 3; do
+              git pull --rebase origin ${GITHUB_REF_NAME:-master} && git push origin HEAD:${GITHUB_REF_NAME:-master} && break || sleep 2
+            done
           fi

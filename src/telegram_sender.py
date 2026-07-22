@@ -180,7 +180,7 @@ Application Link: <a href="{safe_url}">Apply Now</a>{SPARKGEN_FOOTER}
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML",
-        "disable_web_page_preview": True,
+        "link_preview_options": {"is_disabled": True},
         "reply_markup": {
             "inline_keyboard": [
                 [
@@ -217,7 +217,7 @@ def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
-        "disable_web_page_preview": True
+        "link_preview_options": {"is_disabled": True}
     }
     try:
         response = post_with_retry(url, json_payload=payload)
@@ -265,9 +265,9 @@ def send_weekly_summary(bot_token: str, chat_id: str, tracker: dict, total_cycle
                 )
             sent = send_telegram_message(bot_token, chat_id, summary_text)
             if sent:
-                tracker["scans_completed_this_week"] = 1
-                tracker["jobs_evaluated_this_week"] = total_cycle_jobs
-                tracker["alerts_sent_this_week"] = total_cycle_alerts
+                tracker["scans_completed_this_week"] = 0
+                tracker["jobs_evaluated_this_week"] = 0
+                tracker["alerts_sent_this_week"] = 0
                 tracker["last_summary_sent"] = datetime.now().isoformat()
                 return True
     except Exception as e:

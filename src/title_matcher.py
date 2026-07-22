@@ -43,7 +43,7 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
 
     # 0. Negative role blocklist check: discard off-field jobs unless explicitly targeted
     for neg_word in NEGATIVE_ROLE_BLOCKLIST:
-        if re.search(rf'\b{re.escape(neg_word)}\b', job_lower) and neg_word not in combined_targets:
+        if re.search(rf'\b{re.escape(neg_word)}\b', job_lower) and not re.search(rf'\b{re.escape(neg_word)}\b', combined_targets):
             return False
     
     for target in target_titles:

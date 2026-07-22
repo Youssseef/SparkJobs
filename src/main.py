@@ -33,15 +33,15 @@ def get_cv_text(cv_version: str) -> str:
         # H-01 Fix: Sanitize version string and verify path stays within CVS_DIR
         clean_ver = os.path.basename(ver)
         pdf_path = os.path.abspath(os.path.join(CVS_DIR, f"{clean_ver}.pdf"))
-        if pdf_path.startswith(os.path.abspath(CVS_DIR)) and os.path.exists(pdf_path):
+        if pdf_path.startswith(os.path.abspath(CVS_DIR) + os.sep) and os.path.exists(pdf_path):
             return extract_text_from_pdf(pdf_path)
             
         docx_path = os.path.abspath(os.path.join(CVS_DIR, f"{clean_ver}.docx"))
-        if docx_path.startswith(os.path.abspath(CVS_DIR)) and os.path.exists(docx_path):
+        if docx_path.startswith(os.path.abspath(CVS_DIR) + os.sep) and os.path.exists(docx_path):
             return extract_text_from_docx(docx_path)
             
         txt_path = os.path.abspath(os.path.join(CVS_DIR, f"{clean_ver}.txt"))
-        if txt_path.startswith(os.path.abspath(CVS_DIR)) and os.path.exists(txt_path):
+        if txt_path.startswith(os.path.abspath(CVS_DIR) + os.sep) and os.path.exists(txt_path):
             try:
                 with open(txt_path, "r", encoding="utf-8") as f:
                     return f.read().strip()
@@ -246,8 +246,12 @@ def run_scanner():
                         job_desc_lower = job.get("description", "").lower()
                         job_company_lower = job.get("company", "").lower()
                         for kw in exclude_keywords:
-                            kw_lower = kw.lower()
-                            if kw_lower in job_title_lower or kw_lower in job_desc_lower or kw_lower in job_company_lower:
+                            kw_clean = kw.strip().lower()
+                            if not kw_clean:
+                                continue
+                            kw_pattern = re.compile(rf'\b{re.escape(kw_clean)}\b')
+                            if (kw_pattern.search(job_title_lower) or kw_pattern.search(job_desc_lower) 
+                                    or kw_pattern.search(job_company_lower)):
                                 should_exclude = True
                                 break
                     

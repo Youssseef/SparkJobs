@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import random
 import hashlib
@@ -48,6 +49,10 @@ def is_url_reliable(url: str, site: str) -> bool:
         return False
     if "indeed.com/rc/clk" in u:
         return False
+    if "indeed.com" in u and "jk=" in u:
+        jk_match = re.search(r'jk=([a-f0-9]{8,})', u)
+        if not jk_match:
+            return False
     if "google" in site.lower() or "google.com" in u:
         if "ibp=htl;jobs" in u or "htlcert" in u or "google.com/search" in u or "google.com/url?" in u:
             return False
@@ -134,14 +139,17 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 url_direct = safe_str(row.get("job_url_direct", ""))
                 url_indirect = safe_str(row.get("job_url", ""))
                 
-                url = url_direct if (url_direct and url_direct.strip()) else url_indirect
-
                 if site == "indeed":
+                    # Track A Fix: Prefer canonical Indeed viewjob URL (job_url_indirect) over employer ATS link
+                    url = url_indirect if (url_indirect and url_indirect.strip()) else url_direct
+                    if url and "indeed.com" in url:
+                        # Anchored regex to clean prefixed job keys safely without stripping internal substrings
+                        url = re.sub(r'(?<=jk=)(indeed-|in-)(?=[a-f0-9])', '', url)
                     if not url or not url.strip():
-                        clean_id = job_id.replace("indeed-", "").replace("in-", "")
+                        clean_id = re.sub(r'^(indeed-|in-)(?=[a-f0-9])', '', job_id)
                         url = f"https://www.indeed.com/viewjob?jk={clean_id}"
-                    elif "indeed.com" in url and "jk=" in url:
-                        url = url.replace("jk=in-", "jk=").replace("jk=indeed-", "jk=")
+                else:
+                    url = url_direct if (url_direct and url_direct.strip()) else url_indirect
 
                 if site == "google":
                     if not url_direct or not url_direct.strip():
@@ -263,18 +271,18 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
         print(f"Scraping We Work Remotely for '{search_term}'...")
         
         category = "remote-programming-jobs"
-        st_lower = search_term.lower()
-        if any(kw in st_lower for kw in ["design", "ux", "ui", "creative", "artist", "illustrator"]):
+        search_words = set(re.findall(r'\b\w+\b', search_term.lower()))
+        if any(kw in search_words for kw in ["design", "ux", "ui", "creative", "artist", "illustrator"]):
             category = "remote-design-jobs"
-        elif any(kw in st_lower for kw in ["product", "project", "owner", "scrum", "manager"]):
+        elif any(kw in search_words for kw in ["product", "project", "owner", "scrum", "manager"]):
             category = "remote-product-jobs"
-        elif any(kw in st_lower for kw in ["support", "customer", "success", "help"]):
+        elif any(kw in search_words for kw in ["support", "customer", "success", "help"]):
             category = "remote-customer-support-jobs"
-        elif any(kw in st_lower for kw in ["sales", "marketing", "growth", "seo", "ads"]):
+        elif any(kw in search_words for kw in ["sales", "marketing", "growth", "seo", "ads"]):
             category = "remote-sales-and-marketing-jobs"
-        elif any(kw in st_lower for kw in ["writer", "copy", "content"]):
+        elif any(kw in search_words for kw in ["writer", "copy", "content"]):
             category = "remote-copywriting-jobs"
-        elif any(kw in st_lower for kw in ["devops", "sysadmin", "sre", "cloud", "infrastructure"]):
+        elif any(kw in search_words for kw in ["devops", "sysadmin", "sre", "cloud", "infrastructure"]):
             category = "remote-devops-sysadmin-jobs"
         elif any(kw in st_lower for kw in ["business", "exec", "ceo", "operations", "finance", "legal"]):
             category = "remote-business-exec-management-jobs"

@@ -51,8 +51,23 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
                 if path == "src/main.py":
                     latest_sha = template_sha
                 if template_sha and local_sha != template_sha:
-                    update_available = True
-                    break
+                    content_b64 = meta.get("content", "")
+                    if content_b64:
+                        import base64
+                        try:
+                            # Normalize template and local contents to prevent LF/CRLF mismatch false positives
+                            template_content = base64.b64decode(content_b64).decode("utf-8")
+                            norm_template = template_content.replace("\r\n", "\n").replace("\r", "\n").strip()
+                            norm_local = local_data.decode("utf-8", errors="ignore").replace("\r\n", "\n").replace("\r", "\n").strip()
+                            if norm_template != norm_local:
+                                update_available = True
+                                break
+                        except Exception:
+                            update_available = True
+                            break
+                    else:
+                        update_available = True
+                        break
 
         if update_available and latest_sha:
             if tracker.get("last_update_alert_sha") != latest_sha:

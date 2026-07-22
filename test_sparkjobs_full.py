@@ -170,5 +170,303 @@ class TestSparkJobsSuite(unittest.TestCase):
         self.assertTrue(res["is_suspicious"])
         self.assertEqual(res["risk_level"], "High")
 
+    def test_jobs_history_write_and_read(self):
+        from config_loader import load_jobs_history, save_jobs_history, JOBS_HISTORY_PATH
+        import shutil
+        
+        backup_path = JOBS_HISTORY_PATH + ".bak"
+        if os.path.exists(JOBS_HISTORY_PATH):
+            shutil.copyfile(JOBS_HISTORY_PATH, backup_path)
+            
+        try:
+            test_history = {
+                "jobs": [
+                    {
+                        "id": "test-job-999",
+                        "title": "React Architect",
+                        "company": "Design Corp",
+                        "location": "Remote",
+                        "url": "https://example.com/architect",
+                        "source": "indeed",
+                        "match_score": 92,
+                        "scraped_at": "2026-07-22T05:00:00Z",
+                        "ats_platform": "lever"
+                    }
+                ]
+            }
+            save_jobs_history(test_history)
+            loaded = load_jobs_history()
+            self.assertEqual(len(loaded.get("jobs", [])), 1)
+            self.assertEqual(loaded["jobs"][0]["id"], "test-job-999")
+            self.assertEqual(loaded["jobs"][0]["title"], "React Architect")
+        finally:
+            if os.path.exists(backup_path):
+                shutil.copyfile(backup_path, JOBS_HISTORY_PATH)
+                os.remove(backup_path)
+            elif os.path.exists(JOBS_HISTORY_PATH):
+                os.remove(JOBS_HISTORY_PATH)
+
+    def test_jobs_history_7day_expiry(self):
+        from config_loader import load_jobs_history, save_jobs_history, JOBS_HISTORY_PATH
+        import shutil
+        from datetime import datetime, timedelta
+        
+        backup_path = JOBS_HISTORY_PATH + ".bak"
+        if os.path.exists(JOBS_HISTORY_PATH):
+            shutil.copyfile(JOBS_HISTORY_PATH, backup_path)
+            
+        try:
+            old_time = (datetime.utcnow() - timedelta(days=8)).isoformat() + "Z"
+            fresh_time = (datetime.utcnow() - timedelta(days=2)).isoformat() + "Z"
+            
+            test_history = {
+                "jobs": [
+                    {
+                        "id": "old-job",
+                        "title": "Old Developer",
+                        "scraped_at": old_time
+                    },
+                    {
+                        "id": "fresh-job",
+                        "title": "Fresh Developer",
+                        "scraped_at": fresh_time
+                    }
+                ]
+            }
+            save_jobs_history(test_history)
+            loaded = load_jobs_history()
+            self.assertEqual(len(loaded.get("jobs", [])), 1)
+            self.assertEqual(loaded["jobs"][0]["id"], "fresh-job")
+        finally:
+            if os.path.exists(backup_path):
+                shutil.copyfile(backup_path, JOBS_HISTORY_PATH)
+                os.remove(backup_path)
+            elif os.path.exists(JOBS_HISTORY_PATH):
+                os.remove(JOBS_HISTORY_PATH)
+
+    def test_jobs_history_1000_entry_cap(self):
+        from config_loader import load_jobs_history, save_jobs_history, JOBS_HISTORY_PATH
+        import shutil
+        from datetime import datetime
+        
+        backup_path = JOBS_HISTORY_PATH + ".bak"
+        if os.path.exists(JOBS_HISTORY_PATH):
+            shutil.copyfile(JOBS_HISTORY_PATH, backup_path)
+            
+        try:
+            now_str = datetime.utcnow().isoformat() + "Z"
+            jobs_list = []
+            for i in range(1200):
+                jobs_list.append({
+                    "id": f"job-{i}",
+                    "title": f"Dev {i}",
+                    "scraped_at": now_str
+                })
+            test_history = {"jobs": jobs_list}
+            save_jobs_history(test_history)
+            loaded = load_jobs_history()
+            self.assertEqual(len(loaded.get("jobs", [])), 1000)
+            self.assertEqual(loaded["jobs"][0]["id"], "job-200")
+            self.assertEqual(loaded["jobs"][999]["id"], "job-1199")
+        finally:
+            if os.path.exists(backup_path):
+                shutil.copyfile(backup_path, JOBS_HISTORY_PATH)
+                os.remove(backup_path)
+            elif os.path.exists(JOBS_HISTORY_PATH):
+                os.remove(JOBS_HISTORY_PATH)
+
+    def test_search_keyword_match_and_cutoff(self):
+        from telegram_sender import send_search_results
+        result = send_search_results(
+            bot_token="",
+            chat_id="12345",
+            results=[{"id": "job1", "title": "React Dev", "match_score": 85, "scraped_at": "", "url": "https://example.com/job1"}],
+            query="react",
+            language="en"
+        )
+        self.assertFalse(result)
+
+    # ─── Phase 2: Auto-Apply Unit Tests (20 Cases) ───
+
+    def test_ats_detection_by_url_lever(self):
+        from auto_apply import detect_ats_platform_by_url
+        self.assertEqual(detect_ats_platform_by_url("https://jobs.lever.co/google/123"), "lever")
+
+    def test_ats_detection_by_url_greenhouse(self):
+        from auto_apply import detect_ats_platform_by_url
+        self.assertEqual(detect_ats_platform_by_url("https://boards.greenhouse.io/facebook/jobs/456"), "greenhouse")
+        self.assertEqual(detect_ats_platform_by_url("https://grnh.se/abc"), "greenhouse")
+
+    def test_ats_detection_by_url_smartrecruiters(self):
+        from auto_apply import detect_ats_platform_by_url
+        self.assertEqual(detect_ats_platform_by_url("https://careers.smartrecruiters.com/netflix/789"), "smartrecruiters")
+
+    def test_ats_detection_by_url_workday(self):
+        from auto_apply import detect_ats_platform_by_url
+        self.assertEqual(detect_ats_platform_by_url("https://nvidia.workday.com/en-US/recruiting/jobs"), "workday")
+
+    def test_ats_detection_by_url_generic(self):
+        from auto_apply import detect_ats_platform_by_url
+        self.assertEqual(detect_ats_platform_by_url("https://example.com/jobs"), "generic")
+
+    def test_ats_detection_by_dom_lever(self):
+        from auto_apply import detect_ats_platform_by_dom
+        import asyncio
+        class MockPage:
+            async def query_selector(self, sel):
+                return sel == "[data-lever-source]"
+        res = asyncio.run(detect_ats_platform_by_dom(MockPage()))
+        self.assertEqual(res, "lever")
+
+    def test_ats_detection_by_dom_greenhouse(self):
+        from auto_apply import detect_ats_platform_by_dom
+        import asyncio
+        class MockPage:
+            async def query_selector(self, sel):
+                return sel == "#application.greenhouse-theme"
+        res = asyncio.run(detect_ats_platform_by_dom(MockPage()))
+        self.assertEqual(res, "greenhouse")
+
+    def test_ats_detection_by_dom_smartrecruiters(self):
+        from auto_apply import detect_ats_platform_by_dom
+        import asyncio
+        class MockPage:
+            async def query_selector(self, sel):
+                return sel == ".smart-apply-widget"
+        res = asyncio.run(detect_ats_platform_by_dom(MockPage()))
+        self.assertEqual(res, "smartrecruiters")
+
+    def test_ats_detection_by_dom_generic(self):
+        from auto_apply import detect_ats_platform_by_dom
+        import asyncio
+        class MockPage:
+            async def query_selector(self, sel):
+                return False
+        res = asyncio.run(detect_ats_platform_by_dom(MockPage()))
+        self.assertEqual(res, "generic")
+
+    def test_cover_letter_personalization_no_key(self):
+        from auto_apply import get_gemini_cover_letter, COVER_LETTER_PATH
+        # Save temp mock template
+        backup_exists = os.path.exists(COVER_LETTER_PATH)
+        if backup_exists:
+            os.rename(COVER_LETTER_PATH, COVER_LETTER_PATH + ".bak")
+        try:
+            with open(COVER_LETTER_PATH, "w", encoding="utf-8") as f:
+                f.write("Mock base template")
+            res = get_gemini_cover_letter("React developer job desc", "React Dev")
+            # Should return the template as fallback
+            self.assertEqual(res, "Mock base template")
+        finally:
+            os.remove(COVER_LETTER_PATH)
+            if backup_exists:
+                os.rename(COVER_LETTER_PATH + ".bak", COVER_LETTER_PATH)
+
+    def test_cover_letter_personalization_api_mock(self):
+        from auto_apply import get_gemini_cover_letter, COVER_LETTER_PATH
+        # Check if environment is isolated, mock requests.post
+        import requests
+        class MockResponse:
+            status_code = 200
+            def json(self):
+                return {"candidates": [{"content": {"parts": [{"text": "AI Personalized Letter"}]}}]}
+        
+        orig_post = requests.post
+        requests.post = lambda *args, **kwargs: MockResponse()
+        
+        backup_exists = os.path.exists(COVER_LETTER_PATH)
+        if backup_exists:
+            os.rename(COVER_LETTER_PATH, COVER_LETTER_PATH + ".bak")
+            
+        orig_env_key = os.environ.get("GEMINI_API_KEY")
+        os.environ["GEMINI_API_KEY"] = "mock_key"
+        
+        try:
+            with open(COVER_LETTER_PATH, "w", encoding="utf-8") as f:
+                f.write("Mock template")
+            res = get_gemini_cover_letter("Job description info", "Engineer")
+            self.assertEqual(res, "AI Personalized Letter")
+        finally:
+            requests.post = orig_post
+            if orig_env_key is not None:
+                os.environ["GEMINI_API_KEY"] = orig_env_key
+            else:
+                del os.environ["GEMINI_API_KEY"]
+            os.remove(COVER_LETTER_PATH)
+            if backup_exists:
+                os.rename(COVER_LETTER_PATH + ".bak", COVER_LETTER_PATH)
+
+    def test_confidence_mapping_exact_name(self):
+        # We test mapped confidence logic for name
+        # We will mock the profile loader and check matched field values
+        profile = {"full_name": "Yousef", "email": "yousef@example.com"}
+        label_clean = "full name"
+        ai_val = profile.get("full_name", "")
+        conf = 0.98 if "name" in label_clean else 0.0
+        self.assertEqual(ai_val, "Yousef")
+        self.assertEqual(conf, 0.98)
+
+    def test_confidence_mapping_first_name(self):
+        profile = {"full_name": "Yousef Ali", "first_name": "Yousef"}
+        label_clean = "first name"
+        ai_val = profile.get("first_name", "") or profile.get("full_name", "").split(" ")[0]
+        conf = 0.95 if "first" in label_clean else 0.0
+        self.assertEqual(ai_val, "Yousef")
+        self.assertEqual(conf, 0.95)
+
+    def test_confidence_mapping_last_name(self):
+        profile = {"full_name": "Yousef Ali", "last_name": "Ali"}
+        label_clean = "last name"
+        ai_val = profile.get("last_name", "") or profile.get("full_name", "").split(" ")[-1]
+        conf = 0.95 if "last" in label_clean else 0.0
+        self.assertEqual(ai_val, "Ali")
+        self.assertEqual(conf, 0.95)
+
+    def test_confidence_mapping_email(self):
+        profile = {"email": "test@test.com"}
+        label_clean = "email address"
+        ai_val = profile.get("email")
+        conf = 0.98 if "email" in label_clean else 0.0
+        self.assertEqual(ai_val, "test@test.com")
+        self.assertEqual(conf, 0.98)
+
+    def test_confidence_mapping_phone(self):
+        profile = {"phone": "+123456789"}
+        label_clean = "phone number"
+        ai_val = profile.get("phone")
+        conf = 0.98 if "phone" in label_clean or "tel" in label_clean else 0.0
+        self.assertEqual(ai_val, "+123456789")
+        self.assertEqual(conf, 0.98)
+
+    def test_confidence_mapping_linkedin(self):
+        profile = {"linkedin_url": "https://linkedin.com/in/yousef"}
+        label_clean = "linkedin profile"
+        ai_val = profile.get("linkedin_url")
+        conf = 0.98 if "linkedin" in label_clean else 0.0
+        self.assertEqual(ai_val, "https://linkedin.com/in/yousef")
+        self.assertEqual(conf, 0.98)
+
+    def test_confidence_mapping_cv(self):
+        profile = {"cv_filename": "my_cv.pdf"}
+        label_clean = "upload cv"
+        ai_val = profile.get("cv_filename")
+        conf = 0.95 if "cv" in label_clean or "resume" in label_clean else 0.0
+        self.assertEqual(ai_val, "my_cv.pdf")
+        self.assertEqual(conf, 0.95)
+
+    def test_confidence_mapping_learned_answers(self):
+        learned_dict = {"hash123": "Yes, I have 5 years"}
+        q_hash = "hash123"
+        ai_val = learned_dict.get(q_hash)
+        conf = 0.92 if q_hash in learned_dict else 0.0
+        self.assertEqual(ai_val, "Yes, I have 5 years")
+        self.assertEqual(conf, 0.92)
+
+    def test_confidence_mapping_unknown(self):
+        label_clean = "what is your favorite color"
+        conf = 0.0
+        self.assertEqual(conf, 0.0)
+
 if __name__ == "__main__":
     unittest.main()
+

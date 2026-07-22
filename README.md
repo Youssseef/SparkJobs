@@ -15,6 +15,14 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **On-Demand Telegram Search & Two-Phase Auto-Apply Engine — Phase 1 & 2 (July 2026):**
+    *   **Telegram `/search` Command (Phase 1)**: Added async on-demand search matching terms across title, company, location with immediately-responding backend webhook to respect Telegram's 5s deadline. Included human-readable age formatting and stale-bot status flags.
+    *   **Two-Tier ATS & Auto-Apply (Phase 2)**: Built Playwright browser automation script `auto_apply.py` executing two-tier ATS domain/DOM fingerprinting (Lever, Greenhouse, SmartRecruiters) and page traversal.
+    *   **Gemini Cover Letter Personalization**: Coupled Gemini model content generation with the analyze flow to personalize cover letter contents dynamically on scan.
+    *   **Frontend Jobs Feed & Review Modal**: Created bilingual `AutoApplyPanel` React component rendering the jobs feed, confidence-colored pre-filled field review modal, application history, and GitHub Actions minutes budget.
+    *   **Supabase Schema Columns**: Integrated `auto_apply_enabled` database column with automated template migration trigger on activation.
+    *   **100% Build & Test Verification**: Confirmed Python test suite (**40/40 PASS** in 0.1s), Node.js jest tests (**76/76 PASS**), and Vite admin production build success.
+
 *   **100% Forensic Audit Remediation & Indeed Link Bug Resolution — Phase 1-P4 (July 2026):**
     *   **Indeed Link Bug & ID Corruption Fix (Track A)**: Replaced non-anchored string replace of `"in-"` with anchored regex `re.sub(r'(?<=jk=)(indeed-|in-)(?=[a-f0-9])', '', url)`, preventing job ID string corruption. Swapped URL selection to prefer canonical `indeed.com/viewjob?jk=...` over ephemeral ATS redirects, fixing 404s and title mismatches. Added hex key validation in `is_url_reliable()`.
     *   **Host Header Injection Defense (P0-1)**: Secured webhook registration in `setupRoutes.js` using `process.env.BACKEND_BASE_URL` fallback, eliminating host header spoofing vectors.

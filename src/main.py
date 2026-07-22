@@ -5,7 +5,7 @@ import time
 from collections import Counter
 from datetime import datetime, timedelta
 import requests
-from cv_processor import extract_text_from_pdf, extract_text_from_docx
+from cv_loader import get_cv_text
 from scraper import run_all_scrapes
 from fraud_detector import analyze_job_for_fraud
 from ai_matcher import analyze_job_match
@@ -17,39 +17,10 @@ from config_loader import (
 )
 from title_matcher import is_title_relevant
 from update_checker import check_for_updates
+from history_writer import append_to_history
 
-def get_cv_text(cv_version: str) -> str:
-    """
-    Loads text from CV file. Supports .pdf, .docx, and .txt.
-    Tries fallback options if the configured version is missing.
-    """
-    versions_to_try = []
-    if cv_version:
-        versions_to_try.append(cv_version)
-    if "default_cv" not in versions_to_try:
-        versions_to_try.append("default_cv")
 
-    for ver in versions_to_try:
-        # H-01 Fix: Sanitize version string and verify path stays within CVS_DIR
-        clean_ver = os.path.basename(ver)
-        pdf_path = os.path.abspath(os.path.join(CVS_DIR, f"{clean_ver}.pdf"))
-        if pdf_path.startswith(os.path.abspath(CVS_DIR) + os.sep) and os.path.exists(pdf_path):
-            return extract_text_from_pdf(pdf_path)
-            
-        docx_path = os.path.abspath(os.path.join(CVS_DIR, f"{clean_ver}.docx"))
-        if docx_path.startswith(os.path.abspath(CVS_DIR) + os.sep) and os.path.exists(docx_path):
-            return extract_text_from_docx(docx_path)
-            
-        txt_path = os.path.abspath(os.path.join(CVS_DIR, f"{clean_ver}.txt"))
-        if txt_path.startswith(os.path.abspath(CVS_DIR) + os.sep) and os.path.exists(txt_path):
-            try:
-                with open(txt_path, "r", encoding="utf-8") as f:
-                    return f.read().strip()
-            except Exception as e:
-                print(f"Error reading txt CV {txt_path}: {e}")
-                
-    print(f"Warning: CV file not found for versions {versions_to_try} in {CVS_DIR}")
-    return ""
+
 
 def run_scanner():
     """
@@ -178,6 +149,7 @@ def run_scanner():
     all_missing_keywords = []
     job_sources_count = {}
     match_scores = []
+    newly_evaluated_jobs = []
 
     # Load candidate CV
     cv_text = get_cv_text(cv_version)
@@ -300,6 +272,17 @@ def run_scanner():
                     except (ValueError, TypeError):
                         match_score = 0
 
+                    newly_evaluated_jobs.append({
+                        "id": job_id,
+                        "title": job["title"],
+                        "company": job.get("company", ""),
+                        "location": job.get("location", "Remote"),
+                        "url": job["url"],
+                        "source": job.get("source", "unknown"),
+                        "match_score": match_score
+                    })
+
+
                     if match_score > 0:
                         match_scores.append(match_score)
                     
@@ -379,6 +362,9 @@ def run_scanner():
 
     # Check for repository/bot software updates
     check_for_updates(bot_token, chat_id, tracker, language)
+
+    # Append newly evaluated jobs to jobs_history.json
+    append_to_history(newly_evaluated_jobs)
 
     # Consolidated single save for tracker state at end of cycle (M-02, M-10)
     save_status_tracker(tracker)

@@ -1,7 +1,7 @@
 import os
 import json
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Paths definition
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,6 +10,49 @@ SEEN_JOBS_PATH = os.path.join(BASE_DIR, "data", "seen_jobs.json")
 STATUS_TRACKER_PATH = os.path.join(BASE_DIR, "data", "status_tracker.json")
 CVS_DIR = os.path.join(BASE_DIR, "data", "cvs")
 COVER_LETTER_PATH = os.path.join(BASE_DIR, "data", "cover_letter.txt")
+JOBS_HISTORY_PATH = os.path.join(BASE_DIR, "data", "jobs_history.json")
+
+JOBS_HISTORY_MAX_ENTRIES = 1000
+JOBS_HISTORY_DAYS = 7
+
+def load_jobs_history() -> dict:
+    if not os.path.exists(JOBS_HISTORY_PATH):
+        return {"jobs": []}
+    try:
+        with open(JOBS_HISTORY_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {"jobs": []}
+
+def save_jobs_history(history: dict):
+    """
+    Saves jobs history atomically, enforcing 7-day expiry and a 1,000-entry safety cap.
+    """
+    cutoff = (datetime.utcnow() - timedelta(days=JOBS_HISTORY_DAYS)).isoformat() + "Z"
+    history["jobs"] = [j for j in history.get("jobs", []) if j.get("scraped_at", "") >= cutoff]
+    if len(history["jobs"]) > JOBS_HISTORY_MAX_ENTRIES:
+        history["jobs"] = history["jobs"][-JOBS_HISTORY_MAX_ENTRIES:]
+    
+    tmp_path = None
+    try:
+        dir_name = os.path.dirname(JOBS_HISTORY_PATH)
+        os.makedirs(dir_name, exist_ok=True)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix="history_", suffix=".tmp")
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, JOBS_HISTORY_PATH)
+        tmp_path = None
+    except (TypeError, OSError) as e:
+        print(f"Error saving jobs history: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
 
 def load_status_tracker() -> dict:
     if not os.path.exists(STATUS_TRACKER_PATH):

@@ -1,0 +1,68 @@
+name: SparkJobs — Submit Application
+on:
+  workflow_dispatch:
+    inputs:
+      job_url:
+        description: 'Job application URL'
+        required: true
+      user_id:
+        description: 'SparkGen user ID for status tracking'
+        required: true
+
+concurrency:
+  group: sparkjobs-submit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Playwright browser
+        run: python -m playwright install chromium --with-deps
+
+      - name: Submit Application
+        run: python src/auto_apply.py --mode=submit --url="${{ github.event.inputs.job_url }}"
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Upload confirmation screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-confirmation-${{ github.run_id }}
+          path: data/screenshots/
+          retention-days: 90
+
+      - name: Commit application_log.json
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/application_log.json
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update application_log.json"
+            git pull --rebase origin ${GITHUB_REF_NAME:-master}
+            git push origin HEAD:${GITHUB_REF_NAME:-master}
+          fi

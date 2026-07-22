@@ -273,6 +273,72 @@ def send_weekly_summary(bot_token: str, chat_id: str, tracker: dict, total_cycle
     except Exception as e:
         print(f"Error executing weekly summary routine: {e}")
     return False
+def _human_age(scraped_at_str: str, language: str = "en") -> str:
+    if not scraped_at_str:
+        return "unknown" if language == "en" else "غير معروف"
+    try:
+        scraped_at = datetime.fromisoformat(scraped_at_str.replace("Z", "+00:00"))
+        delta = datetime.now(scraped_at.tzinfo) - scraped_at
+        if delta.days > 0:
+            if delta.days == 1:
+                return "1 day ago" if language == "en" else "منذ يوم"
+            return f"{delta.days} days ago" if language == "en" else f"منذ {delta.days} أيام"
+        hours = delta.seconds // 3600
+        if hours > 0:
+            if hours == 1:
+                return "1 hour ago" if language == "en" else "منذ ساعة"
+            return f"{hours} hours ago" if language == "en" else f"منذ {hours} ساعات"
+        minutes = (delta.seconds % 3600) // 60
+        if minutes == 1:
+            return "1 minute ago" if language == "en" else "منذ دقيقة"
+        return f"{minutes} minutes ago" if language == "en" else f"منذ {minutes} دقائق"
+    except Exception:
+        return "just now" if language == "en" else "الآن"
+
+def send_search_results(bot_token: str, chat_id: str, results: list, query: str, last_scan_at: str = None, language: str = "en") -> bool:
+    """
+    Renders up to 5 job search results and sends them to Telegram.
+    Includes stale-bot feedback when last scan is old.
+    """
+    if not results:
+        is_stale = False
+        last_scan_text = ""
+        if last_scan_at:
+            try:
+                last_scan = datetime.fromisoformat(last_scan_at.replace("Z", "+00:00"))
+                delta = datetime.now(last_scan.tzinfo) - last_scan
+                if delta.total_seconds() > 48 * 3600:
+                    is_stale = True
+                    last_scan_text = _human_age(last_scan_at, language)
+            except Exception:
+                pass
+
+        if language == "ar":
+            if is_stale:
+                msg = f"🔍 لم يتم العثور على وظائف تطابق <b>{escape_html(query)}</b> في آخر 48 ساعة.\n\n⚠️ <i>ملاحظة: آخر فحص تم {last_scan_text} — يرجى التأكد من أن البوت يعمل بشكل صحيح.</i>"
+            else:
+                msg = f"🔍 لم يتم العثور على وظائف تطابق <b>{escape_html(query)}</b> في آخر 48 ساعة."
+        else:
+            if is_stale:
+                msg = f"🔍 No jobs found matching <b>{escape_html(query)}</b> in the last 48 hours.\n\n⚠️ <i>Note: Last scan was {last_scan_text} — please check that your bot is running.</i>"
+            else:
+                msg = f"🔍 No jobs found matching <b>{escape_html(query)}</b> in the last 48 hours."
+        return send_telegram_message(bot_token, chat_id, msg + SPARKGEN_FOOTER)
+
+    if language == "ar":
+        msg = f"🔍 <b>نتائج البحث عن:</b> <i>{escape_html(query)}</i>\n\n"
+    else:
+        msg = f"🔍 <b>Search results for:</b> <i>{escape_html(query)}</i>\n\n"
+
+    for i, job in enumerate(results[:5], 1):
+        age = _human_age(job.get("scraped_at", ""), language)
+        apply_label = "تقدم الآن" if language == "ar" else "Apply Now"
+        msg += (
+            f"<b>{i}. {escape_html(job['title'])}</b>\n"
+            f"🏢 {escape_html(job.get('company',''))}  •  🎯 {job.get('match_score',0)}%  •  🕐 {age}\n"
+            f"<a href='{job['url']}'>{apply_label} →</a>\n\n"
+        )
+    return send_telegram_message(bot_token, chat_id, msg + SPARKGEN_FOOTER)
 
 if __name__ == "__main__":
     dummy_job = {

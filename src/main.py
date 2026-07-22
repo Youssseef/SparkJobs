@@ -1,9 +1,14 @@
 import os
+import sys
 import json
 import random
 import time
 from collections import Counter
 from datetime import datetime, timedelta
+
+# Ensure src/ directory is in sys.path even when executed as `python src/main.py`
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import requests
 from cv_loader import get_cv_text
 from scraper import run_all_scrapes

@@ -8,6 +8,9 @@ import requests
 import asyncio
 from datetime import datetime
 
+# Ensure src/ directory is in sys.path even when executed directly
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 # Paths definition
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 USER_PROFILE_PATH = os.path.join(BASE_DIR, "data", "user_profile.json")

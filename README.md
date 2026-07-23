@@ -15,6 +15,10 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Default State Files & Resilient Workflow Staging (July 2026):**
+    *   **Initialized Default State File**: Committed a default empty `data/jobs_history.json` containing `{"jobs": []}` to the template repository so that all new user repositories start with a tracked history file, preventing failures on early runs.
+    *   **Resilient Git Staging in Workflow**: Hardened the git staging step in `.github/workflows/scan.yml` to loop and stage files only if they exist on disk (`if [ -f "$file" ]; then git add "$file"; fi`), preventing "pathspec did not match any files" crashes.
+
 *   **Python Module Path Resolution & Workflow Working Directory Hardening (July 2026):**
     *   **Universal Module Import Path Fallback**: Inserted `sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))` at the top of `src/main.py` and `src/auto_apply.py`. This guarantees peer module imports (`cv_loader`, `scraper`, `ai_matcher`, `telegram_sender`) resolve seamlessly regardless of whether Python is executed from repo root (`python src/main.py`) or `src/` directory.
     *   **GitHub Actions Working Directory**: Updated `.github/workflows/scan.yml`, `analyze_form.yml`, and `submit_application.yml` to switch into `src/` before invoking Python scripts (`cd src && python main.py`).

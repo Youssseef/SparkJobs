@@ -47,7 +47,11 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/seen_jobs.json data/status_tracker.json data/jobs_history.json
+          for file in data/seen_jobs.json data/status_tracker.json data/jobs_history.json; do
+            if [ -f "$file" ]; then
+              git add "$file"
+            fi
+          done
           if ! git diff --staged --quiet; then
             git commit -m "update: bot state $(date +'%Y-%m-%d %H:%M')"
             for i in 1 2 3; do

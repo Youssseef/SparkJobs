@@ -61,11 +61,12 @@ def mark_job_as_seen(db: dict | str, job_id: str, title: str, company: str):
     Saves a job_id with metadata and current timestamp to the seen jobs database.
     Supports mutating an in-memory dict or disk persistence.
     """
+    iso_now = datetime.utcnow().isoformat() + "Z"
     if isinstance(db, dict):
         db[job_id] = {
             "title": title,
             "company": company,
-            "date": datetime.now().isoformat()
+            "date": iso_now
         }
         return
 
@@ -73,20 +74,20 @@ def mark_job_as_seen(db: dict | str, job_id: str, title: str, company: str):
     seen_jobs[job_id] = {
         "title": title,
         "company": company,
-        "date": datetime.now().isoformat()
+        "date": iso_now
     }
     save_seen_jobs(db, seen_jobs)
 
 def cleanup_old_jobs(db: dict | str, days_to_keep: int = 30) -> dict:
     """
     Prunes the database, deleting entries older than the retention limit (default 30 days)
-    to prevent file size bloat.
+    to prevent file size bloat. Handles offset-aware and offset-naive timestamps safely.
     """
     seen_jobs = db if isinstance(db, dict) else load_seen_jobs(db)
     if not seen_jobs:
         return {}
 
-    cutoff = datetime.now() - timedelta(days=days_to_keep)
+    cutoff = datetime.utcnow() - timedelta(days=days_to_keep)
     pruned_jobs = {}
     pruned_count = 0
 
@@ -94,14 +95,17 @@ def cleanup_old_jobs(db: dict | str, days_to_keep: int = 30) -> dict:
         try:
             job_date_str = meta.get("date", "")
             if job_date_str:
-                job_date = datetime.fromisoformat(job_date_str)
+                job_date = datetime.fromisoformat(job_date_str.replace("Z", "+00:00"))
+                if job_date.tzinfo is not None:
+                    job_date = job_date.replace(tzinfo=None)
                 if job_date > cutoff:
                     pruned_jobs[job_id] = meta
                 else:
                     pruned_count += 1
             else:
                 pruned_jobs[job_id] = meta
-        except Exception:
+        except Exception as err:
+            print(f"Warning: Failed to parse date '{meta.get('date')}' for job {job_id}: {err}")
             pruned_jobs[job_id] = meta
 
     if pruned_count > 0:

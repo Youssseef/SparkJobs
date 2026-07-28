@@ -28,8 +28,23 @@ def save_jobs_history(history: dict):
     """
     Saves jobs history atomically, enforcing 7-day expiry and a 1,000-entry safety cap.
     """
-    cutoff = (datetime.utcnow() - timedelta(days=JOBS_HISTORY_DAYS)).isoformat() + "Z"
-    history["jobs"] = [j for j in history.get("jobs", []) if j.get("scraped_at", "") >= cutoff]
+    cutoff = datetime.utcnow() - timedelta(days=JOBS_HISTORY_DAYS)
+    fresh_jobs = []
+    for j in history.get("jobs", []):
+        scraped_at_str = j.get("scraped_at", "")
+        if not scraped_at_str:
+            fresh_jobs.append(j)
+            continue
+        try:
+            job_dt = datetime.fromisoformat(scraped_at_str.replace("Z", "+00:00"))
+            if job_dt.tzinfo is not None:
+                job_dt = job_dt.replace(tzinfo=None)
+            if job_dt >= cutoff:
+                fresh_jobs.append(j)
+        except Exception:
+            fresh_jobs.append(j)
+
+    history["jobs"] = fresh_jobs
     if len(history["jobs"]) > JOBS_HISTORY_MAX_ENTRIES:
         history["jobs"] = history["jobs"][-JOBS_HISTORY_MAX_ENTRIES:]
     

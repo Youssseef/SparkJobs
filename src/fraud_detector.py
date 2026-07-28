@@ -37,8 +37,18 @@ def analyze_job_for_fraud(job: dict) -> dict:
     company = (job.get("company") or "").lower()
     url = (job.get("url") or "").lower()
     
-    # 1. Check age of posting (handled in main scraper but reinforced here if date is present)
-    # If the date is passed as a string and we can parse it, check it.
+    # 1. Check age of posting
+    job_date_raw = job.get("date", "")
+    if job_date_raw:
+        try:
+            job_date = datetime.fromisoformat(str(job_date_raw).replace("Z", "+00:00"))
+            if job_date.tzinfo is not None:
+                job_date = job_date.replace(tzinfo=None)
+            age_days = (datetime.utcnow() - job_date).days
+            if age_days > FRAUD_RULES["max_age_days"]:
+                reasons.append(f"Posting is stale ({age_days} days old), which increases risk of ghost/expired job listings.")
+        except Exception:
+            pass
     
     # 2. Check Description Word Count (M-05 Fix: Language-aware threshold for concise Arabic text)
     words = description.split()

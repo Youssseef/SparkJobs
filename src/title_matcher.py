@@ -16,14 +16,14 @@ NEGATIVE_ROLE_BLOCKLIST = {
 def get_role_core(title: str, fillers: set = FILLERS) -> str:
     """
     Extracts the defining domain core word from a job title by checking from the end.
-    e.g., "Product Designer" -> "designer"
-          "Frontend Engineer" -> "frontend"
-          "Senior React Developer" -> "react"
+    Supports technical symbols like 'c++', 'c#', '.net'.
     """
-    words = re.findall(r'\b\w+\b', title.lower())
+    short_valid_cores = {"c++", "c#", "ui", "ux", "ai", "ml", "qa", "go", "c", "net"}
+    words = re.findall(r'[\w+#.-]+', title.lower())
     for word in reversed(words):
-        if word not in fillers and len(word) > 2:
-            return word
+        clean_word = word.strip(".-")
+        if clean_word not in fillers and (len(clean_word) > 2 or clean_word in short_valid_cores):
+            return clean_word
     return words[-1] if words else ""
 
 def is_title_relevant(job_title: str, target_titles: list) -> bool:
@@ -32,8 +32,6 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
     Ensures that the job title is relevant to at least one target title by verifying
     direct substring match or overlap of the target's core domain word, and checks
     against negative off-field role blocklists.
-    M-03 Fix: Uses regex word boundaries for negative role blocklist checks.
-    M-04 Fix: Skips generic filler words during domain core matching.
     """
     if not target_titles or not job_title:
         return True
@@ -43,7 +41,11 @@ def is_title_relevant(job_title: str, target_titles: list) -> bool:
 
     # 0. Negative role blocklist check: discard off-field jobs unless explicitly targeted
     for neg_word in NEGATIVE_ROLE_BLOCKLIST:
-        if re.search(rf'\b{re.escape(neg_word)}\b', job_lower) and not re.search(rf'\b{re.escape(neg_word)}\b', combined_targets):
+        kw_escaped = re.escape(neg_word)
+        start_b = r'\b' if neg_word[0].isalnum() else ''
+        end_b = r'\b' if neg_word[-1].isalnum() else ''
+        pattern = rf'{start_b}{kw_escaped}{end_b}'
+        if re.search(pattern, job_lower) and not re.search(pattern, combined_targets):
             return False
     
     for target in target_titles:

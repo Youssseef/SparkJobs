@@ -3,6 +3,8 @@ import sys
 import json
 import random
 import time
+import re
+import hashlib
 from collections import Counter
 from datetime import datetime, timedelta
 
@@ -158,8 +160,8 @@ def run_scanner():
 
     # Load candidate CV
     cv_text = get_cv_text(cv_version)
-    if not cv_text or len(cv_text.strip()) < 150:
-        warning_type = "missing" if not cv_text else "scanned"
+    if cv_text is None or len(cv_text.strip()) < 150:
+        warning_type = "missing" if cv_text is None else "scanned"
         tracker_key = f"cv_warning_sent_{warning_type}"
         if not tracker.get(tracker_key, False):
             print(f"Warning: CV is {warning_type}. Sending warning notification via Telegram...")
@@ -226,7 +228,10 @@ def run_scanner():
                             kw_clean = kw.strip().lower()
                             if not kw_clean:
                                 continue
-                            kw_pattern = re.compile(rf'\b{re.escape(kw_clean)}\b')
+                            kw_escaped = re.escape(kw_clean)
+                            start_b = r'\b' if kw_clean[0].isalnum() else ''
+                            end_b = r'\b' if kw_clean[-1].isalnum() else ''
+                            kw_pattern = re.compile(rf'{start_b}{kw_escaped}{end_b}')
                             if (kw_pattern.search(job_title_lower) or kw_pattern.search(job_desc_lower) 
                                     or kw_pattern.search(job_company_lower)):
                                 should_exclude = True
@@ -307,8 +312,10 @@ def run_scanner():
                             alerts_sent_count += 1
                             total_cycle_alerts += 1
                             tracker["alerts_sent_this_week"] = tracker.get("alerts_sent_this_week", 0) + 1
-                            mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
                             time.sleep(random.uniform(1.0, 2.0))
+                        else:
+                            print(f"Failed to send alert for '{job.get('title')}' - marking job as seen to prevent infinite AI quota loop.")
+                        mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
                     else:
                         mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
                 except Exception as job_err:
@@ -329,9 +336,10 @@ def run_scanner():
         avg_score = round(sum(match_scores) / len(match_scores), 2) if match_scores else 0
         
         telemetry_url = os.environ.get("SPARKJOBS_TELEMETRY_URL", "https://sparkgen-backend.vercel.app/api/jobs/telemetry/ping")
+        user_hash = hashlib.sha256(str(chat_id).encode("utf-8")).hexdigest()[:16] if chat_id else "anonymous"
         
         payload = {
-            "telegram_chat_id": chat_id,
+            "user_hash": user_hash,
             "jobs_evaluated": total_cycle_jobs,
             "scams_detected": scam_jobs_skipped,
             "alerts_sent": total_cycle_alerts,

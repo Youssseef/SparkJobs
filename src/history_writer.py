@@ -1,10 +1,10 @@
 import os
 from datetime import datetime
 from config_loader import load_jobs_history, save_jobs_history
+from auto_apply import detect_ats_platform_by_url
 
 def detect_ats_platform(url: str) -> str:
-    # Phase 1 stub, will be replaced with real two-tier detection in Phase 2
-    return "unknown"
+    return detect_ats_platform_by_url(url)
 
 def append_to_history(new_jobs: list):
     """

@@ -165,7 +165,8 @@ Application Link: <a href="{safe_url}">Apply Now</a>{SPARKGEN_FOOTER}
             truncated_outreach = outreach[:300] + "..."
             message = message.replace(escape_html(outreach), escape_html(truncated_outreach))
         if len(message.encode('utf-8')) > MAX_TG_LENGTH:
-            message = message[:4050] + "\n...\n" + SPARKGEN_FOOTER
+            encoded_msg = message.encode('utf-8')
+            message = encoded_msg[:4000].decode('utf-8', errors='ignore') + "\n...\n" + SPARKGEN_FOOTER
 
     btn_applied = "تم التقديم ✅" if language == "ar" else "Applied ✅"
     btn_ignore = "تجاهل ❌" if language == "ar" else "Ignore ❌"

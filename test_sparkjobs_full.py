@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from datetime import datetime, timedelta
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
@@ -189,7 +190,7 @@ class TestSparkJobsSuite(unittest.TestCase):
                         "url": "https://example.com/architect",
                         "source": "indeed",
                         "match_score": 92,
-                        "scraped_at": "2026-07-22T05:00:00Z",
+                        "scraped_at": datetime.utcnow().isoformat() + "Z",
                         "ats_platform": "lever"
                     }
                 ]
@@ -466,6 +467,47 @@ class TestSparkJobsSuite(unittest.TestCase):
         label_clean = "what is your favorite color"
         conf = 0.0
         self.assertEqual(conf, 0.0)
+
+    def test_cv_loader_filename_with_extension(self):
+        from cv_loader import get_cv_text, CVS_DIR
+        test_file = os.path.join(CVS_DIR, "test_ext_cv.txt")
+        with open(test_file, "w", encoding="utf-8") as f:
+            f.write("Candidate CV Content Test 1234567890 1234567890 1234567890 1234567890 1234567890 1234567890 1234567890 1234567890 1234567890 1234567890")
+        try:
+            res_with_ext = get_cv_text("test_ext_cv.txt")
+            self.assertIsNotNone(res_with_ext)
+            self.assertIn("Candidate CV Content Test", res_with_ext)
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    def test_deduplicator_tz_aware_pruning(self):
+        from deduplicator import cleanup_old_jobs
+        db = {
+            "old_tz_job": {"date": "2020-01-01T12:00:00+00:00"},
+            "fresh_tz_job": {"date": datetime.utcnow().isoformat() + "Z"}
+        }
+        res = cleanup_old_jobs(db, days_to_keep=30)
+        self.assertNotIn("old_tz_job", res)
+        self.assertIn("fresh_tz_job", res)
+
+    def test_title_matcher_symbol_tech_stack(self):
+        from title_matcher import is_title_relevant, get_role_core
+        self.assertEqual(get_role_core("C++ Developer"), "c++")
+        self.assertEqual(get_role_core("Senior C# Engineer"), "c#")
+        self.assertTrue(is_title_relevant("Senior C++ Developer", ["C++ Developer"]))
+
+    def test_update_checker_scoping_safety(self):
+        import update_checker
+        # Verify checking non-existent files does not raise UnboundLocalError
+        orig_files = update_checker.check_for_updates.__globals__.get("files_to_check", [])
+        try:
+            update_checker.check_for_updates.__globals__["files_to_check"] = ["non_existent_file.py"]
+            update_checker.check_for_updates("bot", "chat", {}, "en")
+        except UnboundLocalError:
+            self.fail("check_for_updates raised UnboundLocalError on missing file!")
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     unittest.main()

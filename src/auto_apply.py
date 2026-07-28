@@ -4,9 +4,13 @@ import json
 import re
 import time
 import argparse
+import hashlib
+import tempfile
 import requests
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+from telegram_sender import send_telegram_message, escape_html
 
 # Ensure src/ directory is in sys.path even when executed directly
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -56,15 +60,28 @@ async def detect_ats_platform_by_dom(page) -> str:
 def write_error(msg: str):
     print(f"Error: {msg}")
     try:
-        os.makedirs(os.path.dirname(FORM_ANALYSIS_PATH), exist_ok=True)
-        with open(FORM_ANALYSIS_PATH, "w", encoding="utf-8") as f:
+        dir_name = os.path.dirname(FORM_ANALYSIS_PATH)
+        os.makedirs(dir_name, exist_ok=True)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix="analysis_", suffix=".tmp")
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
             json.dump({
                 "status": "error",
                 "error_message": msg,
                 "fields": []
             }, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, FORM_ANALYSIS_PATH)
     except Exception as e:
         print(f"Failed to write error status file: {e}")
+
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if bot_token and chat_id:
+        try:
+            send_telegram_message(bot_token, chat_id, f"⚠️ <b>SparkJobs Auto-Apply Alert:</b> {escape_html(msg)}")
+        except Exception as t_err:
+            print(f"Failed to send Telegram alert: {t_err}")
 
 def get_gemini_cover_letter(job_description: str, job_title: str) -> str:
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
@@ -297,7 +314,11 @@ async def analyze_form_flow(url: str):
                     print(f"Error scanning input element: {inner_err}")
 
             # Write ready status
-            with open(FORM_ANALYSIS_PATH, "w", encoding="utf-8") as f:
+            # Write ready status
+            dir_name = os.path.dirname(FORM_ANALYSIS_PATH)
+            os.makedirs(dir_name, exist_ok=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix="analysis_", suffix=".tmp")
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 json.dump({
                     "job_url": url,
                     "job_title": job_title,
@@ -309,6 +330,9 @@ async def analyze_form_flow(url: str):
                     "total_pages": page_index + 1,
                     "fields": fields
                 }, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, FORM_ANALYSIS_PATH)
 
             print("Analysis complete. form_analysis.json updated.")
             
@@ -317,7 +341,7 @@ async def analyze_form_flow(url: str):
             chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
             if bot_token and chat_id:
                 try:
-                    alert_msg = f"📋 <b>SparkJobs:</b> Form analysis completed for <b>{escapeHtml(job_title)}</b>.\n\n👉 Open the dashboard to review and submit the pre-filled application."
+                    alert_msg = f"📋 <b>SparkJobs:</b> Form analysis completed for <b>{escape_html(job_title)}</b>.\n\n👉 Open the dashboard to review and submit the pre-filled application."
                     url_tele = f"https://api.telegram.org/bot{bot_token}/sendMessage"
                     requests.post(url_tele, json={"chat_id": chat_id, "text": alert_msg, "parse_mode": "HTML"}, timeout=10)
                 except Exception as t_err:
@@ -329,8 +353,16 @@ async def analyze_form_flow(url: str):
             await browser.close()
 
 async def submit_form_flow(url: str, fields_json: str):
-    confirmed_fields = json.loads(fields_json)
-    
+    if not os.path.exists(USER_PROFILE_PATH):
+        write_error("Auto-Apply Profile not set up. Please complete your profile in the dashboard first.")
+        return
+
+    try:
+        confirmed_fields = json.loads(fields_json)
+    except Exception as json_err:
+        write_error(f"Invalid fields payload format: {json_err}")
+        return
+
     with open(USER_PROFILE_PATH, "r", encoding="utf-8") as f:
         profile = json.load(f)
 
@@ -418,10 +450,13 @@ async def submit_form_flow(url: str, fields_json: str):
                 except Exception:
                     pass
             
+            raw_title = await page.title()
+            job_title_str = raw_title.strip() if raw_title else "Job Application"
+
             log_data["applications"].append({
                 "id": f"run-{timestamp}",
                 "job_url": url,
-                "job_title": page.title() if await page.title() else "Job Application",
+                "job_title": job_title_str,
                 "company": "Company",
                 "ats_platform": detect_ats_platform_by_url(url),
                 "status": "applied",
@@ -433,8 +468,14 @@ async def submit_form_flow(url: str, fields_json: str):
                 "error_message": None
             })
 
-            with open(APPLICATION_LOG_PATH, "w", encoding="utf-8") as f:
+            dir_name = os.path.dirname(APPLICATION_LOG_PATH)
+            os.makedirs(dir_name, exist_ok=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix="applog_", suffix=".tmp")
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 json.dump(log_data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, APPLICATION_LOG_PATH)
 
             # Send Telegram alert
             bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -449,6 +490,13 @@ async def submit_form_flow(url: str, fields_json: str):
 
         except Exception as e:
             print(f"Submission failed: {e}")
+            bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+            chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+            if bot_token and chat_id:
+                try:
+                    send_telegram_message(bot_token, chat_id, f"❌ <b>SparkJobs Auto-Apply Error:</b> Submission failed: {escape_html(str(e))}")
+                except Exception:
+                    pass
         finally:
             # Delete pending submission path
             if os.path.exists(PENDING_SUBMISSION_PATH):

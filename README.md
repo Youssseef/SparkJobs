@@ -15,6 +15,16 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **100% Deep Audit & 37-Issue Zero-Assumption Fixes (July 2026):**
+    *   **Runtime Crash Resolution**: Resolved 12 Critical bugs, including missing `import re` in `main.py`, undefined `st_lower` in `scraper.py`, missing `BeautifulSoup` / `timedelta` / `escape_html` imports in `auto_apply.py`, and Playwright `page.title()` coroutine JSON serialization crash.
+    *   **CV Path & Extension Normalization**: Fixed double-extension path corruption in `cv_loader.py` (`resume.pdf.pdf`), enabling exact path resolution for custom CV filenames containing extensions and accurately distinguishing missing files from empty text.
+    *   **Timezone-Aware Pruning**: Fixed offset-naive vs offset-aware datetime comparison in `deduplicator.py` and `config_loader.py`, allowing 30-day seen jobs and 7-day history pruning to operate without `TypeError` crashes.
+    *   **Google Jobs Reliability Filter**: Restructured `scraper.py` URL filtering to ensure `is_url_reliable()` evaluates for ALL job sites including Google, stripping ephemeral search redirect links (`google.com/url?q=`).
+    *   **Git Workflow & Artifact State Sync**: Updated `.github/workflows/submit_application.yml` and `keep_alive.yml` to stage deletions/state changes (`git add -A data/`) and use 3-attempt rebase retry loops, preventing stale `pending_submission.json` data leaks across runs.
+    *   **Symbol-Aware Technical Matching**: Enhanced `title_matcher.py` and `main.py` exclude keyword regexes with symbol-aware boundaries, supporting technical stacks like `C++`, `C#`, and `.NET` without regex boundary truncation.
+    *   **Auto-Apply Error Alerts & Atomic State**: Added Telegram alert dispatches for form analysis errors/CAPTCHAs and form submission failures. Refactored `form_analysis.json` and `application_log.json` writes to use atomic `tempfile.mkstemp` + `os.replace`.
+    *   **100% Test Suite Verification**: Expanded `test_sparkjobs_full.py` unit test suite covering 44 regression test cases with **44/44 PASS (100% Exit Code 0)**.
+
 *   **Default State Files & Resilient Workflow Staging (July 2026):**
     *   **Initialized Default State File**: Committed a default empty `data/jobs_history.json` containing `{"jobs": []}` to the template repository so that all new user repositories start with a tracked history file, preventing failures on early runs.
     *   **Resilient Git Staging in Workflow**: Hardened the git staging step in `.github/workflows/scan.yml` to loop and stage files only if they exist on disk (`if [ -f "$file" ]; then git add "$file"; fi`), preventing "pathspec did not match any files" crashes.

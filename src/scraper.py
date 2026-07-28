@@ -156,7 +156,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                         continue
                     if "google.com/search" in url_direct:
                         continue
-                elif not is_url_reliable(url, site):
+                if not is_url_reliable(url, site):
                     continue
 
                 jobs_list.append({
@@ -217,6 +217,8 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
                         "source": "Remote OK",
                         "date": datetime.now().isoformat()
                     })
+        else:
+            print(f"Remote OK returned HTTP {response.status_code}. Skipping.")
         print(f"Remote OK found {len(jobs_list)} jobs.")
     except Exception as e:
         print(f"Error scraping Remote OK: {e}")
@@ -254,6 +256,8 @@ def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
                     "source": "Remotive",
                     "date": datetime.now().isoformat()
                 })
+        else:
+            print(f"Remotive returned HTTP {response.status_code}. Skipping.")
         print(f"Remotive found {len(jobs_list)} jobs.")
     except Exception as e:
         print(f"Error scraping Remotive: {e}")
@@ -284,7 +288,7 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
             category = "remote-copywriting-jobs"
         elif any(kw in search_words for kw in ["devops", "sysadmin", "sre", "cloud", "infrastructure"]):
             category = "remote-devops-sysadmin-jobs"
-        elif any(kw in st_lower for kw in ["business", "exec", "ceo", "operations", "finance", "legal"]):
+        elif any(kw in search_term.lower() for kw in ["business", "exec", "ceo", "operations", "finance", "legal"]):
             category = "remote-business-exec-management-jobs"
             
         rss_url = f"https://weworkremotely.com/categories/{category}.rss"
@@ -313,12 +317,12 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                     continue
 
                 # M-11 Fix: Word-level search so 'Product Designer' matches 'Designer, Product'
-                search_words = [w.lower() for w in search_term.split() if len(w) > 2]
+                match_words = [w.lower() for w in search_term.split() if len(w) > 2]
                 title_lower = title.lower()
                 desc_lower = desc.lower()
                 is_match = (
                     search_term.lower() in title_lower or search_term.lower() in desc_lower or
-                    (search_words and all(w in title_lower or w in desc_lower for w in search_words))
+                    (match_words and all(w in title_lower or w in desc_lower for w in match_words))
                 )
                 if is_match:
                     company = "WeWorkRemotely"

@@ -6,4 +6,5 @@ requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
 pandas>=2.0.0
+# Pinned to exact 1.44.0 version to align with cached Chromium browser binary in GitHub Actions
 playwright==1.44.0

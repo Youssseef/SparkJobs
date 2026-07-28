@@ -34,6 +34,7 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
         for path in files_to_check:
             local_file_path = os.path.join(BASE_DIR, path.replace("/", os.sep))
             local_sha = ""
+            local_data = b""
             if os.path.exists(local_file_path):
                 with open(local_file_path, "rb") as f:
                     local_data = f.read()

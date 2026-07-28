@@ -58,13 +58,14 @@ jobs:
           path: data/screenshots/
           retention-days: 90
 
-      - name: Commit application_log.json
+      - name: Commit application_log.json and sync state
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/application_log.json
+          git add -A data/
           if ! git diff --staged --quiet; then
-            git commit -m "chore: update application_log.json"
-            git pull --rebase origin ${GITHUB_REF_NAME:-master}
-            git push origin HEAD:${GITHUB_REF_NAME:-master}
+            git commit -m "chore: update application_log.json and sync state"
+            for i in 1 2 3; do
+              git pull --rebase origin ${GITHUB_REF_NAME:-master} && git push origin HEAD:${GITHUB_REF_NAME:-master} && break || sleep 2
+            done
           fi

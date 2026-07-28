@@ -30,9 +30,10 @@ def extract_text_from_docx(docx_path: str) -> str:
     """
     C-02 & H-04 Fix: Extracts raw text from DOCX using safe defusedxml parser
     protecting against XXE, entity expansion, and Zip Bomb decompression attacks.
+    Preserves text run continuity within paragraphs.
     """
     try:
-        texts = []
+        paragraphs = []
         with zipfile.ZipFile(docx_path) as docx:
             for file_name in docx.namelist():
                 if file_name.startswith('word/') and file_name.endswith('.xml'):
@@ -43,13 +44,14 @@ def extract_text_from_docx(docx_path: str) -> str:
                             continue
                         xml_content = docx.read(file_name)
                         root = ET.fromstring(xml_content)
-                        for el in root.iter():
-                            if el.tag.endswith('}t') or el.tag == 't':
-                                if el.text:
-                                    texts.append(el.text)
+                        for p in root.iter():
+                            if p.tag.endswith('}p') or p.tag == 'p':
+                                p_texts = [el.text for el in p.iter() if (el.tag.endswith('}t') or el.tag == 't') and el.text]
+                                if p_texts:
+                                    paragraphs.append("".join(p_texts))
                     except Exception:
                         pass
-        return " ".join(texts).strip()
+        return "\n".join(paragraphs).strip()
     except Exception as e:
         print(f"Error reading DOCX {docx_path}: {e}")
         return ""
@@ -65,10 +67,12 @@ def anonymize_cv_text(text: str) -> str:
     # 1. Strip Emails
     text = _EMAIL_REGEX.sub('[ANONYMIZED_EMAIL]', text)
 
-    # 2. Strip Phone Numbers
+    # 2. Strip Phone Numbers (with guard against 4-digit year ranges like 2018-2022)
     def phone_replacer(match):
         val = match.group(0)
         digits = re.sub(r'\D', '', val)
+        if len(digits) == 8 and (digits.startswith("19") or digits.startswith("20")) and (digits[4:].startswith("19") or digits[4:].startswith("20")):
+            return val
         if 7 <= len(digits) <= 15:
             return '[ANONYMIZED_PHONE]'
         return val

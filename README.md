@@ -15,6 +15,11 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Secret-Aware Proxy Status Resolution & Automatic Jobs History Initialization (July 2026):**
+    *   **Secret-Aware ScraperAPI Status**: Updated `Dashboard.tsx` to query repository secrets (`list-secrets`) so that if `SCRAPERAPI_KEY` exists in GitHub Secrets, the UI correctly evaluates `hasProxy` to `true`, displaying `🟢 Stable (via ScraperAPI)`.
+    *   **CV Original Filename Preservation**: Updated `SetupWizard.tsx` to store `cv_original_name` in `data/config.json` and updated `Dashboard.tsx` to preserve `cv_original_name` when rendering the UI, preventing original filenames from being displayed as `default_cv.pdf`.
+    *   **Automatic History Initialization**: Updated `/setup/write-config` in `setupRoutes.js` to automatically create and initialize `data/jobs_history.json` (`{"jobs": []}`) during setup if missing, ensuring the Auto-Apply feed is immediately ready.
+
 *   **100% Deep Audit & 37-Issue Zero-Assumption Fixes (July 2026):**
     *   **Runtime Crash Resolution**: Resolved 12 Critical bugs, including missing `import re` in `main.py`, undefined `st_lower` in `scraper.py`, missing `BeautifulSoup` / `timedelta` / `escape_html` imports in `auto_apply.py`, and Playwright `page.title()` coroutine JSON serialization crash.
     *   **CV Path & Extension Normalization**: Fixed double-extension path corruption in `cv_loader.py` (`resume.pdf.pdf`), enabling exact path resolution for custom CV filenames containing extensions and accurately distinguishing missing files from empty text.

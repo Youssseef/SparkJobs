@@ -15,6 +15,16 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **100% URL Quality & Job Field Accuracy Remediation (July 2026):**
+    *   **Workday ATS Pattern Support**: Expanded `ATS_URL_PATTERNS["workday"]` in `auto_apply.py` to include `myworkdayjobs.com` and `workdayjobs.com`, restoring Workday ATS detection and form filling.
+    *   **Closed Job Body Signal Detection**: Added response body string checks (`"this position has been filled"`, `"job not found"`, `"position closed"`) in `auto_apply.py:analyze_form_flow()` to halt auto-apply execution on filled positions returning HTTP 200.
+    *   **Centralized Safe Job URL Formatter & Badges**: Extracted `get_safe_job_url()` in `telegram_sender.py`, enforcing protocol validation (`http://`/`https://` fallback to `sparkgen.net`) and adding dynamic warning badges for login-gated sites (`🔐 Login may be required` for LinkedIn/Glassdoor) and unencrypted links (`🔓 Insecure HTTP link`) across both alert and `/search` result templates.
+    *   **Smart ATS URL Priority for Indeed**: Updated `scraper.py` to prefer `job_url_direct` over Indeed wrapper URLs when direct links point to verified ATS platforms (`greenhouse.io`, `lever.co`, `smartrecruiters.com`, `ashbyhq.com`, `dover.io`, `workday.com`).
+    *   **Word-Boundary Category Routing & Title Normalization**: Fixed WWR category selection in `scraper.py` by converting management category matching to word-boundary sets (`search_words`), and guarded company name extraction against category title prefixes (`"Programming: Senior React Engineer"`).
+    *   **RemoteOK Struct Validation & UTC Consistency**: Replaced positional array slicing (`data[1:]`) in `scrape_remoteok()` with strict item dictionary and `id` presence checks, and standardized all scraper date creation to ISO UTC (`datetime.utcnow().isoformat() + "Z"`).
+    *   **History Writer Safety & Workflow Push Retry**: Added HTTP protocol validation in `history_writer.py` before persisting jobs to `jobs_history.json`, and added a 3-attempt git pull/push retry loop to `.github/workflows/analyze_form.yml`.
+    *   **100% Test Suite Verification**: Expanded `test_sparkjobs_full.py` to 50 unit and integration tests (**50/50 PASS - 100% Exit Code 0**).
+
 *   **Secret-Aware Proxy Status Resolution & Automatic Jobs History Initialization (July 2026):**
     *   **Secret-Aware ScraperAPI Status**: Updated `Dashboard.tsx` to query repository secrets (`list-secrets`) so that if `SCRAPERAPI_KEY` exists in GitHub Secrets, the UI correctly evaluates `hasProxy` to `true`, displaying `🟢 Stable (via ScraperAPI)`.
     *   **CV Original Filename Preservation**: Updated `SetupWizard.tsx` to store `cv_original_name` in `data/config.json` and updated `Dashboard.tsx` to preserve `cv_original_name` when rendering the UI, preventing original filenames from being displayed as `default_cv.pdf`.

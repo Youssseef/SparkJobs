@@ -15,15 +15,18 @@ def append_to_history(new_jobs: list):
     
     history = load_jobs_history()
     for job in new_jobs:
+        url_val = job.get("url", "")
+        if not url_val or not isinstance(url_val, str) or not (url_val.startswith("http://") or url_val.startswith("https://")):
+            continue
         history["jobs"].append({
             "id": job["id"],
             "title": job["title"],
             "company": job.get("company", ""),
             "location": job.get("location", "Remote"),
-            "url": job["url"],
+            "url": url_val,
             "source": job.get("source", "unknown"),
             "match_score": job.get("match_score", 0),
             "scraped_at": datetime.utcnow().isoformat() + "Z",
-            "ats_platform": detect_ats_platform(job["url"])
+            "ats_platform": detect_ats_platform(url_val)
         })
     save_jobs_history(history)

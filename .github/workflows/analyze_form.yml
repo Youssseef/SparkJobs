@@ -58,6 +58,7 @@ jobs:
           git add data/form_analysis.json
           if ! git diff --staged --quiet; then
             git commit -m "chore: update form_analysis.json"
-            git pull --rebase origin ${GITHUB_REF_NAME:-master}
-            git push origin HEAD:${GITHUB_REF_NAME:-master}
+            for i in 1 2 3; do
+              git pull --rebase origin ${GITHUB_REF_NAME:-master} && git push origin HEAD:${GITHUB_REF_NAME:-master} && break || sleep 2
+            done
           fi

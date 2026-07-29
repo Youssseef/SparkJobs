@@ -139,9 +139,12 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 url_direct = safe_str(row.get("job_url_direct", ""))
                 url_indirect = safe_str(row.get("job_url", ""))
                 
+                PREFERRED_ATS_DOMAINS = ["greenhouse.io", "lever.co", "smartrecruiters.com", "ashbyhq.com", "dover.io", "workday.com", "myworkdayjobs.com"]
                 if site == "indeed":
-                    # Track A Fix: Prefer canonical Indeed viewjob URL (job_url_indirect) over employer ATS link
-                    url = url_indirect if (url_indirect and url_indirect.strip()) else url_direct
+                    if url_direct and any(d in url_direct.lower() for d in PREFERRED_ATS_DOMAINS):
+                        url = url_direct
+                    else:
+                        url = url_indirect if (url_indirect and url_indirect.strip()) else url_direct
                     if url and "indeed.com" in url:
                         # Anchored regex to clean prefixed job keys safely without stripping internal substrings
                         url = re.sub(r'(?<=jk=)(indeed-|in-)(?=[a-f0-9])', '', url)
@@ -149,7 +152,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                         clean_id = re.sub(r'^(indeed-|in-)(?=[a-f0-9])', '', job_id)
                         url = f"https://www.indeed.com/viewjob?jk={clean_id}"
                 else:
-                    url = url_direct if (url_direct and url_direct.strip()) else url_indirect
+                    url = url_direct if (url_direct and url_direct.strip() and url_direct.strip().startswith("http")) else url_indirect
 
                 if site == "google":
                     if not url_direct or not url_direct.strip():
@@ -167,7 +170,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                     "url": url,
                     "description": strip_html(safe_str(desc)),
                     "source": safe_str(row.get("site", "JobSpy")),
-                    "date": datetime.now().isoformat()
+                    "date": datetime.utcnow().isoformat() + "Z"
                 })
         
         print(f"JobSpy found {len(jobs_list)} jobs.")
@@ -179,6 +182,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
 def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
     """
     H-03 Fix: URL-encodes search_term query parameter to prevent broken requests.
+    H-04 Fix: Filters response list by checking item dict and 'id' presence instead of fragile positional slicing.
     """
     jobs_list = []
     try:
@@ -202,8 +206,10 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
             except Exception as json_err:
                 print(f"Failed to parse Remote OK JSON response: {json_err}")
                 return jobs_list
-            if isinstance(data, list) and len(data) > 1:
-                for item in data[1:]:
+            if isinstance(data, list):
+                for item in data:
+                    if not isinstance(item, dict) or not item.get("id"):
+                        continue
                     job_url = safe_str(item.get("url", ""))
                     if not is_url_reliable(job_url, "Remote OK"):
                         continue
@@ -215,7 +221,7 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
                         "url": job_url,
                         "description": strip_html(safe_str(item.get("description", ""))),
                         "source": "Remote OK",
-                        "date": datetime.now().isoformat()
+                        "date": datetime.utcnow().isoformat() + "Z"
                     })
         else:
             print(f"Remote OK returned HTTP {response.status_code}. Skipping.")
@@ -254,7 +260,7 @@ def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
                     "url": job_url,
                     "description": strip_html(safe_str(item.get("description", ""))),
                     "source": "Remotive",
-                    "date": datetime.now().isoformat()
+                    "date": datetime.utcnow().isoformat() + "Z"
                 })
         else:
             print(f"Remotive returned HTTP {response.status_code}. Skipping.")
@@ -266,9 +272,9 @@ def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
 def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
     """
     Scrapes jobs from We Work Remotely RSS Feed.
-    H-05 Fix: Renamed inner loop url variable to job_url to prevent variable shadowing.
-    H-09 Fix: Added explicit log for non-200 HTTP response codes.
-    L-11 Fix: Stripped trailing slashes before splitting GUID to prevent ID collisions.
+    H-03 Fix: Uses word boundary set search_words for management category routing.
+    L-04 Fix: Logs category-level URL discards explicitly.
+    M-04 Fix: Guard company parsing against category prefix titles.
     """
     jobs_list = []
     try:
@@ -288,7 +294,7 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
             category = "remote-copywriting-jobs"
         elif any(kw in search_words for kw in ["devops", "sysadmin", "sre", "cloud", "infrastructure"]):
             category = "remote-devops-sysadmin-jobs"
-        elif any(kw in search_term.lower() for kw in ["business", "exec", "ceo", "operations", "finance", "legal"]):
+        elif any(kw in search_words for kw in ["business", "exec", "ceo", "operations", "finance", "legal"]):
             category = "remote-business-exec-management-jobs"
             
         rss_url = f"https://weworkremotely.com/categories/{category}.rss"
@@ -314,6 +320,7 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                     job_url = guid.strip() if (guid and guid.strip()) else link.strip()
 
                 if not is_url_reliable(job_url, "We Work Remotely"):
+                    print(f"WWR: Discarding item with category-level or unreliable URL: {title}")
                     continue
 
                 # M-11 Fix: Word-level search so 'Product Designer' matches 'Designer, Product'
@@ -328,8 +335,14 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                     company = "WeWorkRemotely"
                     if ":" in title:
                         parts = title.split(":", 1)
-                        company = parts[0].strip()
-                        title = parts[1].strip()
+                        potential_company = parts[0].strip()
+                        potential_title = parts[1].strip()
+                        cat_words = {"programming", "design", "product", "customer support", "sales and marketing", "copywriting", "devops", "management"}
+                        if potential_company.lower() not in cat_words and len(potential_company.split()) <= 4:
+                            company = potential_company
+                            title = potential_title
+                        else:
+                            title = potential_title
 
                     # L-11 Fix: Strip trailing slashes before splitting GUID/link
                     if guid and '/' in guid:
@@ -347,7 +360,7 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
                         "url": job_url,
                         "description": strip_html(safe_str(desc)),
                         "source": "We Work Remotely",
-                        "date": datetime.now().isoformat()
+                        "date": datetime.utcnow().isoformat() + "Z"
                     })
         else:
             print(f"We Work Remotely returned HTTP {response.status_code}. Skipping.")

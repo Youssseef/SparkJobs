@@ -58,6 +58,30 @@ def post_with_retry(url: str, json_payload: dict, max_retries: int = 3, timeout:
             time.sleep(2 ** attempt)
     return None
 
+def get_safe_job_url(raw_url: str, language: str = "ar") -> tuple[str, str]:
+    """
+    C-03, H-02, M-03, M-07 Fix: Validates raw job URL, escaping HTML and providing
+    badges for login-gated (LinkedIn, Glassdoor) or insecure HTTP links.
+    Returns (safe_url, url_note_badge).
+    """
+    if not raw_url or not isinstance(raw_url, str):
+        return "https://sparkgen.net", ""
+    
+    clean_url = raw_url.strip()
+    if not (clean_url.startswith('http://') or clean_url.startswith('https://')):
+        return "https://sparkgen.net", ""
+    
+    safe_url = escape_html(clean_url)
+    u_lower = clean_url.lower()
+    
+    note_badge = ""
+    if "linkedin.com/jobs" in u_lower or "glassdoor.com" in u_lower:
+        note_badge = "\n⚠️ <i>🔐 (قد يتطلب تسجيل دخول | Login may be required)</i>" if language == "ar" else "\n⚠️ <i>🔐 (Login may be required)</i>"
+    elif clean_url.startswith('http://'):
+        note_badge = "\n⚠️ <i>🔓 (رابط HTTP غير مشفر | Insecure HTTP link)</i>" if language == "ar" else "\n⚠️ <i>🔓 (Insecure HTTP link)</i>"
+
+    return safe_url, note_badge
+
 def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: dict, profile_name: str, language: str = "ar") -> bool:
     """
     Sends a formatted HTML job alert message to Telegram.
@@ -110,11 +134,8 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
         cons_section = f"\n<b>⚠️ Gaps:</b>\n{cons}" if cons else ""
         missing_section = f"\n<b>🔍 Missing Keywords:</b> {missing}" if missing else ""
 
-    # C-03 Fix: HTML escape and validate job URL
-    raw_url = job.get('url', '')
-    safe_url = escape_html(raw_url)
-    if not (raw_url.startswith('http://') or raw_url.startswith('https://')):
-        safe_url = "https://sparkgen.net"
+    # C-03 & H-02 Fix: HTML escape and validate job URL with badges
+    safe_url, url_note = get_safe_job_url(job.get('url', ''), language)
 
     # 4. Construct HTML message body
     if language == "ar":
@@ -135,7 +156,7 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-رابط التقديم: <a href="{safe_url}">قدّم الآن (Apply Now)</a>{SPARKGEN_FOOTER}
+رابط التقديم: <a href="{safe_url}">قدّم الآن (Apply Now)</a>{url_note}{SPARKGEN_FOOTER}
 """
     else:
         message = f"""<b>New Job Match | {escape_html(profile_name)}</b>
@@ -155,7 +176,7 @@ Recruiter Outreach Message:
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-Application Link: <a href="{safe_url}">Apply Now</a>{SPARKGEN_FOOTER}
+Application Link: <a href="{safe_url}">Apply Now</a>{url_note}{SPARKGEN_FOOTER}
 """
 
     # H-08 Fix: Telegram 4096 character limit guard
@@ -274,6 +295,7 @@ def send_weekly_summary(bot_token: str, chat_id: str, tracker: dict, total_cycle
     except Exception as e:
         print(f"Error executing weekly summary routine: {e}")
     return False
+
 def _human_age(scraped_at_str: str, language: str = "en") -> str:
     if not scraped_at_str:
         return "unknown" if language == "en" else "غير معروف"
@@ -300,6 +322,7 @@ def send_search_results(bot_token: str, chat_id: str, results: list, query: str,
     """
     Renders up to 5 job search results and sends them to Telegram.
     Includes stale-bot feedback when last scan is old.
+    C-03 Fix: Validates and escapes URLs using get_safe_job_url.
     """
     if not results:
         is_stale = False
@@ -334,10 +357,11 @@ def send_search_results(bot_token: str, chat_id: str, results: list, query: str,
     for i, job in enumerate(results[:5], 1):
         age = _human_age(job.get("scraped_at", ""), language)
         apply_label = "تقدم الآن" if language == "ar" else "Apply Now"
+        safe_url, _ = get_safe_job_url(job.get("url", ""), language)
         msg += (
-            f"<b>{i}. {escape_html(job['title'])}</b>\n"
+            f"<b>{i}. {escape_html(job.get('title', ''))}</b>\n"
             f"🏢 {escape_html(job.get('company',''))}  •  🎯 {job.get('match_score',0)}%  •  🕐 {age}\n"
-            f"<a href='{job['url']}'>{apply_label} →</a>\n\n"
+            f"<a href='{safe_url}'>{apply_label} →</a>\n\n"
         )
     return send_telegram_message(bot_token, chat_id, msg + SPARKGEN_FOOTER)
 

@@ -31,7 +31,7 @@ ATS_URL_PATTERNS = {
     "smartrecruiters": ["careers.smartrecruiters.com"],
     "linkedin": ["linkedin.com/jobs"],
     "indeed": ["indeed.com/viewjob", "indeed.com/jobs"],
-    "workday": [".workday.com/en-us/recruiting"],
+    "workday": ["myworkdayjobs.com", "workdayjobs.com", ".workday.com/en-us/recruiting"],
 }
 
 ATS_DOM_SIGNATURES = {
@@ -137,6 +137,19 @@ async def analyze_form_flow(url: str):
         if res.status_code != 200:
             write_error(f"This job posting appears to be closed or expired (HTTP {res.status_code}).")
             return
+        
+        CLOSED_JOB_SIGNALS = [
+            "this position has been filled",
+            "this position is no longer available",
+            "job not found",
+            "position closed",
+            "no longer accepting applications",
+            "job posting has expired"
+        ]
+        if any(sig in res.text.lower() for sig in CLOSED_JOB_SIGNALS):
+            write_error("This job posting appears to be closed (position filled or no longer accepting applications).")
+            return
+
         page_html = res.text
     except Exception as e:
         write_error(f"Job application URL is unreachable: {e}")

@@ -336,10 +336,9 @@ def run_scanner():
         avg_score = round(sum(match_scores) / len(match_scores), 2) if match_scores else 0
         
         telemetry_url = os.environ.get("SPARKJOBS_TELEMETRY_URL", "https://sparkgen-backend.vercel.app/api/jobs/telemetry/ping")
-        user_hash = hashlib.sha256(str(chat_id).encode("utf-8")).hexdigest()[:16] if chat_id else "anonymous"
         
         payload = {
-            "user_hash": user_hash,
+            "telegram_chat_id": str(chat_id) if chat_id else "anonymous",
             "jobs_evaluated": total_cycle_jobs,
             "scams_detected": scam_jobs_skipped,
             "alerts_sent": total_cycle_alerts,

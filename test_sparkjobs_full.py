@@ -713,6 +713,21 @@ class TestSparkJobsSuite(unittest.TestCase):
         self.assertEqual(get_indeed_subdomain("Berlin, Germany"), "de.indeed.com")
         self.assertEqual(get_indeed_subdomain("New York, USA"), "indeed.com")
 
+    def test_url_resolver_normalize_linkedin_url(self):
+        from url_resolver import normalize_linkedin_url
+        self.assertEqual(
+            normalize_linkedin_url("https://ca.linkedin.com/jobs/view/senior-dev-4456274816?position=1&refId=abc"),
+            "https://www.linkedin.com/jobs/view/4456274816"
+        )
+        self.assertEqual(
+            normalize_linkedin_url("https://eg.linkedin.com/jobs/view/4456274816/"),
+            "https://www.linkedin.com/jobs/view/4456274816"
+        )
+        self.assertEqual(
+            normalize_linkedin_url("https://www.linkedin.com/jobs/view/4456274816?trackingId=xyz"),
+            "https://www.linkedin.com/jobs/view/4456274816"
+        )
+
     def test_rule_16_anti_god_component_line_counts(self):
         """Guarantees that all active Python files in src/ are strictly under the 400-line limit."""
         src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")

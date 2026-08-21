@@ -31,6 +31,20 @@ def is_ats_url(url: str) -> bool:
     u = url.lower()
     return any(domain in u for domain in PREFERRED_ATS_DOMAINS)
 
+def normalize_linkedin_url(url: str) -> str:
+    """
+    Normalizes country-specific subdomains (ca., uk., eg., sa.) and tracking tokens
+    to the universal canonical LinkedIn job URL: https://www.linkedin.com/jobs/view/{job_id}
+    Eliminates cross-region 404s and expired guest token errors.
+    """
+    if not url or not isinstance(url, str) or 'linkedin.com' not in url.lower():
+        return url
+    match = re.search(r'/jobs/view/(?:[^\s/?#]*-)?([0-9]{8,})', url)
+    if match:
+        job_id = match.group(1)
+        return f"https://www.linkedin.com/jobs/view/{job_id}"
+    return url
+
 def build_search_fallback_url(company: str, title: str) -> str:
     """Constructs a 1-tap browser search fallback query to open in mobile Safari/Chrome."""
     clean_comp = re.sub(r'[\"\']', '', str(company or '').strip())
@@ -68,6 +82,10 @@ def resolve_canonical_url(raw_url: str, timeout: int = 4) -> tuple[str, bool, st
     clean_url = raw_url.strip()
     if not (clean_url.startswith("http://") or clean_url.startswith("https://")):
         return clean_url, False, "invalid_protocol"
+
+    # Fast path: LinkedIn URLs normalize to universal global job view
+    if "linkedin.com" in clean_url.lower():
+        return normalize_linkedin_url(clean_url), True, "canonical_linkedin"
 
     # Fast path: URL is already a verified ATS domain
     if is_ats_url(clean_url):

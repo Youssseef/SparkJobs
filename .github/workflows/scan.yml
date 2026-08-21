@@ -2,8 +2,8 @@ name: SparkJobs Scanner
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Runs 4x/day (within GitHub Actions free tier budget)
-  workflow_dispatch: # Allows manual trigger
+    - cron: '*/30 * * * *' # Runs every 30 mins (~1,440 runs/mo, well within GitHub 2,000 free minutes limit)
+  workflow_dispatch: # Allows manual instant trigger
 
 jobs:
   scan:
@@ -24,12 +24,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
+
+      - name: Install uv (Ultra-Fast Package Manager)
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "requirements.txt"
 
       - name: Install Dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          uv pip install --system -r requirements.txt
 
       - name: Run Job Scanner
         run: |

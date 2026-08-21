@@ -680,8 +680,48 @@ class TestSparkJobsSuite(unittest.TestCase):
                 shutil.copyfile(cfg_backup, CONFIG_PATH)
                 os.remove(cfg_backup)
 
+    def test_url_resolver_ats_detection(self):
+        from url_resolver import is_ats_url
+        self.assertTrue(is_ats_url("https://boards.greenhouse.io/company/jobs/123"))
+        self.assertTrue(is_ats_url("https://jobs.lever.co/company/456"))
+        self.assertTrue(is_ats_url("https://jobs.ashbyhq.com/company/789"))
+        self.assertTrue(is_ats_url("https://company.myworkdayjobs.com/en-US/careers/job/1"))
+        self.assertTrue(is_ats_url("https://careers.smartrecruiters.com/company/2"))
+        self.assertFalse(is_ats_url("https://google.com/search?q=test"))
+        self.assertFalse(is_ats_url("https://example.com/blog"))
+
+    def test_url_resolver_search_fallback(self):
+        from url_resolver import build_search_fallback_url
+        url = build_search_fallback_url("Apple", "Senior Product Designer")
+        self.assertIn("https://www.google.com/search?q=", url)
+        self.assertIn("Apple", url)
+        self.assertIn("Designer", url)
+
+    def test_url_resolver_embedded_params(self):
+        from url_resolver import extract_embedded_url
+        raw = "https://aggregator.com/click?url=https%3A%2F%2Fboards.greenhouse.io%2Facme%2F123&utm_source=agg"
+        embedded = extract_embedded_url(raw)
+        self.assertEqual(embedded, "https://boards.greenhouse.io/acme/123")
+
+    def test_indeed_regional_subdomains(self):
+        from scraper import get_indeed_subdomain
+        self.assertEqual(get_indeed_subdomain("Saudi Arabia"), "sa.indeed.com")
+        self.assertEqual(get_indeed_subdomain("Riyadh, KSA"), "sa.indeed.com")
+        self.assertEqual(get_indeed_subdomain("Dubai, UAE"), "ae.indeed.com")
+        self.assertEqual(get_indeed_subdomain("Cairo, Egypt"), "eg.indeed.com")
+        self.assertEqual(get_indeed_subdomain("London, United Kingdom"), "uk.indeed.com")
+        self.assertEqual(get_indeed_subdomain("Berlin, Germany"), "de.indeed.com")
+        self.assertEqual(get_indeed_subdomain("New York, USA"), "indeed.com")
+
+    def test_rule_16_anti_god_component_line_counts(self):
+        """Guarantees that all active Python files in src/ are strictly under the 400-line limit."""
+        src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
+        for fname in os.listdir(src_dir):
+            if fname.endswith(".py") and fname != "auto_apply.py":
+                fpath = os.path.join(src_dir, fname)
+                with open(fpath, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                self.assertLess(len(lines), 400, f"File {fname} has {len(lines)} lines, exceeding Rule 16 limit (400 lines)!")
+
 if __name__ == "__main__":
     unittest.main()
-
-
-

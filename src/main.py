@@ -207,7 +207,7 @@ def run_scanner():
             location = "Remote" if remote_only else country_name
             print(f"Scanning for '{title}' in '{location}'...")
             
-            jobs = run_all_scrapes(title, location, scraperapi_key)
+            jobs = run_all_scrapes(title, location, scraperapi_key, hours_old=2)
             
             new_jobs_count = 0
             alerts_sent_count = 0

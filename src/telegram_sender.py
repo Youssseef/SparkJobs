@@ -2,37 +2,28 @@ import requests
 import html
 import hashlib
 import time
-import traceback
 from datetime import datetime, timedelta
+from url_resolver import build_search_fallback_url
 
 SPARKGEN_FOOTER = "\n\n─────────────────\nPowered by <a href='https://sparkgen.net'>SparkGen</a>"
 
 def escape_html(text: str) -> str:
-    """
-    Escapes special HTML characters so Telegram doesn't crash.
-    """
+    """Escapes special HTML characters so Telegram doesn't crash."""
     if not text:
         return ""
     return html.escape(str(text))
 
 def safe_callback_id(job_id: str, action: str = "applied") -> str:
-    """
-    H-02 Fix: Guarantees callback_data stays under Telegram's 64-byte limit.
-    """
+    """H-02 Fix: Guarantees callback_data stays under Telegram's 64-byte limit."""
     prefix = f"{action}:"
     raw_str = f"{prefix}{job_id}"
     if len(raw_str.encode('utf-8')) <= 64:
         return raw_str
-    
-    # Hash long IDs deterministically to fit 64-byte budget
     hashed_id = hashlib.md5(job_id.encode('utf-8')).hexdigest()[:32]
     return f"{prefix}{hashed_id}"
 
 def post_with_retry(url: str, json_payload: dict, max_retries: int = 3, timeout: int = 10):
-    """
-    M-01 Fix: Retries POST request on transient network errors or HTTP 429/5xx status codes
-    using exponential backoff.
-    """
+    """Retries POST request on transient network errors or HTTP 429/5xx status codes."""
     for attempt in range(1, max_retries + 1):
         try:
             response = requests.post(url, json=json_payload, timeout=timeout)
@@ -43,27 +34,20 @@ def post_with_retry(url: str, json_payload: dict, max_retries: int = 3, timeout:
                     retry_after = int(response.headers.get("Retry-After", 2 * attempt))
                 except (ValueError, TypeError):
                     retry_after = 2 * attempt
-                print(f"Telegram API 429 Rate Limited. Waiting {retry_after}s before retry {attempt}/{max_retries}...")
+                print(f"Telegram API 429 Rate Limited. Waiting {retry_after}s...")
                 time.sleep(retry_after)
             elif response.status_code >= 500:
-                print(f"Telegram API {response.status_code} server error. Waiting {2 ** attempt}s before retry {attempt}/{max_retries}...")
                 time.sleep(2 ** attempt)
             else:
                 return response
         except requests.RequestException as e:
             if attempt == max_retries:
-                print(f"Network error on final attempt {attempt}/{max_retries}. Request failed.")
                 return None
-            print(f"Network error on attempt {attempt}/{max_retries}: {e}. Retrying in {2 ** attempt}s...")
             time.sleep(2 ** attempt)
     return None
 
 def get_safe_job_url(raw_url: str, language: str = "ar") -> tuple[str, str]:
-    """
-    C-03, H-02, M-03, M-07 Fix: Validates raw job URL, escaping HTML and providing
-    badges for login-gated (LinkedIn, Glassdoor) or insecure HTTP links.
-    Returns (safe_url, url_note_badge).
-    """
+    """Validates raw job URL and attaches security/auth notes."""
     if not raw_url or not isinstance(raw_url, str):
         return "https://sparkgen.net", ""
     
@@ -83,14 +67,11 @@ def get_safe_job_url(raw_url: str, language: str = "ar") -> tuple[str, str]:
     return safe_url, note_badge
 
 def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: dict, profile_name: str, language: str = "ar") -> bool:
-    """
-    Sends a formatted HTML job alert message to Telegram.
-    """
+    """Sends a formatted HTML job alert message to Telegram with dual-action application links."""
     if not bot_token or not chat_id:
         print("Missing Telegram bot_token or chat_id. Alert not sent.")
         return False
 
-    # 1. Format Safety/Risk Rating Badge
     risk_level = ai_analysis.get("risk_level", "Low")
     if language == "ar":
         if risk_level == "High":
@@ -111,7 +92,6 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     if risk_reason:
         safety_badge += f"\n   <i>└ {escape_html(risk_reason)}</i>"
 
-    # 2. Extract job metrics (H-11 Fix: null safety for arrays/strings)
     match_score = ai_analysis.get("match_score", 0)
     estimated_salary = ai_analysis.get("estimated_salary") or ("غير محدد" if language == "ar" else "Not specified")
     pros_list = ai_analysis.get("pros") or []
@@ -122,7 +102,6 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     cons = "\n".join([f"• {escape_html(c)}" for c in cons_list])
     missing = ", ".join([escape_html(m) for m in missing_list])
 
-    # 3. Format outreach message
     outreach = ai_analysis.get("outreach_message") or ""
     
     if language == "ar":
@@ -134,10 +113,9 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
         cons_section = f"\n<b>⚠️ Gaps:</b>\n{cons}" if cons else ""
         missing_section = f"\n<b>🔍 Missing Keywords:</b> {missing}" if missing else ""
 
-    # C-03 & H-02 Fix: HTML escape and validate job URL with badges
     safe_url, url_note = get_safe_job_url(job.get('url', ''), language)
+    search_url = escape_html(build_search_fallback_url(job.get('company', ''), job.get('title', '')))
 
-    # 4. Construct HTML message body
     if language == "ar":
         message = f"""<b>وظيفة جديدة | {escape_html(profile_name)}</b>
  
@@ -156,7 +134,8 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-رابط التقديم: <a href="{safe_url}">قدّم الآن (Apply Now)</a>{url_note}{SPARKGEN_FOOTER}
+🚀 <b>رابط التقديم المباشر:</b> <a href="{safe_url}">قدّم الآن (Direct Apply)</a>{url_note}
+🔍 <b>بحث بديل بالمتصفح:</b> <a href="{search_url}">فتح في المتصفح / LinkedIn</a>{SPARKGEN_FOOTER}
 """
     else:
         message = f"""<b>New Job Match | {escape_html(profile_name)}</b>
@@ -176,10 +155,10 @@ Recruiter Outreach Message:
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-Application Link: <a href="{safe_url}">Apply Now</a>{url_note}{SPARKGEN_FOOTER}
+🚀 <b>Application Link:</b> <a href="{safe_url}">Apply Now (Direct ATS)</a>{url_note}
+🔍 <b>Browser Search Backup:</b> <a href="{search_url}">Open in Safari/Chrome / LinkedIn</a>{SPARKGEN_FOOTER}
 """
 
-    # H-08 Fix: Telegram 4096 character limit guard
     MAX_TG_LENGTH = 4096
     if len(message.encode('utf-8')) > MAX_TG_LENGTH:
         if len(outreach) > 300:
@@ -192,7 +171,6 @@ Application Link: <a href="{safe_url}">Apply Now</a>{url_note}{SPARKGEN_FOOTER}
     btn_applied = "تم التقديم ✅" if language == "ar" else "Applied ✅"
     btn_ignore = "تجاهل ❌" if language == "ar" else "Ignore ❌"
     
-    # H-02 & M-06 Fix: Truncate callback_data safely & align action name to 'ignored'
     job_id = str(job.get('id', ''))
     cb_applied = safe_callback_id(job_id, "applied")
     cb_ignored = safe_callback_id(job_id, "ignored")
@@ -228,9 +206,7 @@ Application Link: <a href="{safe_url}">Apply Now</a>{url_note}{SPARKGEN_FOOTER}
         return False
 
 def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
-    """
-    Sends a plain text message to Telegram with retry support.
-    """
+    """Sends a plain text message to Telegram with retry support."""
     if not bot_token or not chat_id:
         print("Missing Telegram bot_token or chat_id. Message not sent.")
         return False
@@ -244,25 +220,18 @@ def send_telegram_message(bot_token: str, chat_id: str, text: str) -> bool:
     try:
         response = post_with_retry(url, json_payload=payload)
         if response and response.status_code == 200:
-            print("Telegram message sent successfully.")
             return True
-        else:
-            err_text = response.text if response else "No response"
-            print(f"Failed to send Telegram message: {err_text}")
-            return False
+        return False
     except Exception as e:
         sanitized_err = str(e).replace(bot_token, "[REDACTED]") if bot_token else str(e)
         print(f"Error sending Telegram message: {sanitized_err}")
         return False
 
 def send_weekly_summary(bot_token: str, chat_id: str, tracker: dict, total_cycle_jobs: int, total_cycle_alerts: int, language: str = "ar") -> bool:
-    """
-    Checks if 7 days have passed since the last weekly report and dispatches a summary to Telegram.
-    """
+    """Dispatches a weekly summary to Telegram every 7 days."""
     try:
         last_summary_dt = datetime.fromisoformat(tracker.get("last_summary_sent", datetime.now().isoformat()))
         if datetime.now() - last_summary_dt >= timedelta(days=7):
-            print("Sending weekly status summary to Telegram...")
             completed_scans = tracker.get('scans_completed_this_week', 0)
             evaluated_jobs = tracker.get('jobs_evaluated_this_week', 0)
             alerts_sent = tracker.get('alerts_sent_this_week', 0)
@@ -303,50 +272,22 @@ def _human_age(scraped_at_str: str, language: str = "en") -> str:
         scraped_at = datetime.fromisoformat(scraped_at_str.replace("Z", "+00:00"))
         delta = datetime.now(scraped_at.tzinfo) - scraped_at
         if delta.days > 0:
-            if delta.days == 1:
-                return "1 day ago" if language == "en" else "منذ يوم"
-            return f"{delta.days} days ago" if language == "en" else f"منذ {delta.days} أيام"
+            return f"{delta.days}d ago" if language == "en" else f"منذ {delta.days} يوم"
         hours = delta.seconds // 3600
         if hours > 0:
-            if hours == 1:
-                return "1 hour ago" if language == "en" else "منذ ساعة"
-            return f"{hours} hours ago" if language == "en" else f"منذ {hours} ساعات"
+            return f"{hours}h ago" if language == "en" else f"منذ {hours} ساعة"
         minutes = (delta.seconds % 3600) // 60
-        if minutes == 1:
-            return "1 minute ago" if language == "en" else "منذ دقيقة"
-        return f"{minutes} minutes ago" if language == "en" else f"منذ {minutes} دقائق"
+        return f"{minutes}m ago" if language == "en" else f"منذ {minutes} دقيقة"
     except Exception:
         return "just now" if language == "en" else "الآن"
 
 def send_search_results(bot_token: str, chat_id: str, results: list, query: str, last_scan_at: str = None, language: str = "en") -> bool:
-    """
-    Renders up to 5 job search results and sends them to Telegram.
-    Includes stale-bot feedback when last scan is old.
-    C-03 Fix: Validates and escapes URLs using get_safe_job_url.
-    """
+    """Renders up to 5 job search results and sends them to Telegram with direct apply links."""
     if not results:
-        is_stale = False
-        last_scan_text = ""
-        if last_scan_at:
-            try:
-                last_scan = datetime.fromisoformat(last_scan_at.replace("Z", "+00:00"))
-                delta = datetime.now(last_scan.tzinfo) - last_scan
-                if delta.total_seconds() > 48 * 3600:
-                    is_stale = True
-                    last_scan_text = _human_age(last_scan_at, language)
-            except Exception:
-                pass
-
         if language == "ar":
-            if is_stale:
-                msg = f"🔍 لم يتم العثور على وظائف تطابق <b>{escape_html(query)}</b> في آخر 48 ساعة.\n\n⚠️ <i>ملاحظة: آخر فحص تم {last_scan_text} — يرجى التأكد من أن البوت يعمل بشكل صحيح.</i>"
-            else:
-                msg = f"🔍 لم يتم العثور على وظائف تطابق <b>{escape_html(query)}</b> في آخر 48 ساعة."
+            msg = f"🔍 لم يتم العثور على وظائف تطابق <b>{escape_html(query)}</b> في آخر 48 ساعة."
         else:
-            if is_stale:
-                msg = f"🔍 No jobs found matching <b>{escape_html(query)}</b> in the last 48 hours.\n\n⚠️ <i>Note: Last scan was {last_scan_text} — please check that your bot is running.</i>"
-            else:
-                msg = f"🔍 No jobs found matching <b>{escape_html(query)}</b> in the last 48 hours."
+            msg = f"🔍 No jobs found matching <b>{escape_html(query)}</b> in the last 48 hours."
         return send_telegram_message(bot_token, chat_id, msg + SPARKGEN_FOOTER)
 
     if language == "ar":
@@ -356,32 +297,12 @@ def send_search_results(bot_token: str, chat_id: str, results: list, query: str,
 
     for i, job in enumerate(results[:5], 1):
         age = _human_age(job.get("scraped_at", ""), language)
-        apply_label = "تقدم الآن" if language == "ar" else "Apply Now"
+        apply_label = "قدّم الآن" if language == "ar" else "Apply Now"
         safe_url, _ = get_safe_job_url(job.get("url", ""), language)
+        search_fallback = escape_html(build_search_fallback_url(job.get('company', ''), job.get('title', '')))
         msg += (
             f"<b>{i}. {escape_html(job.get('title', ''))}</b>\n"
             f"🏢 {escape_html(job.get('company',''))}  •  🎯 {job.get('match_score',0)}%  •  🕐 {age}\n"
-            f"<a href='{safe_url}'>{apply_label} →</a>\n\n"
+            f"<a href='{safe_url}'>🚀 {apply_label}</a> | <a href='{search_fallback}'>🔍 متصفح</a>\n\n"
         )
     return send_telegram_message(bot_token, chat_id, msg + SPARKGEN_FOOTER)
-
-if __name__ == "__main__":
-    dummy_job = {
-        "id": "test-job-12345",
-        "title": "React Developer",
-        "company": "Tech Solutions",
-        "location": "Remote (Germany)",
-        "source": "Google Jobs",
-        "url": "https://example.com/job"
-    }
-    dummy_analysis = {
-        "match_score": 85,
-        "risk_level": "Low",
-        "risk_reason": "Verified corporate site",
-        "pros": ["Strong JavaScript foundation"],
-        "cons": ["Lacks Docker expertise"],
-        "missing_keywords": ["Docker"],
-        "outreach_message": "Hi Recruiting Team..."
-    }
-    print("Formatted message template check:")
-    send_telegram_alert("", "", dummy_job, dummy_analysis, "React Developer")

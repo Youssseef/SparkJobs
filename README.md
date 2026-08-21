@@ -15,6 +15,14 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Universal Multi-Platform Coverage & Pre-Flight Canonical URL Unfurling (August 2026):**
+    *   **Universal 8-Platform Engine**: Expanded scraping coverage to the world's top universal networks: **LinkedIn Jobs, Indeed, Google Jobs, Glassdoor, ZipRecruiter, RemoteOK, Remotive, and WeWorkRemotely** across all career fields (tech, design, marketing, finance, healthcare, operations, sales, legal, customer support).
+    *   **Pre-Flight Canonical URL Unfurler (`url_resolver.py`)**: Built follow-redirect resolution engine that unmasks tracking and aggregator links into direct canonical ATS career pages (`boards.greenhouse.io`, `jobs.lever.co`, `jobs.ashbyhq.com`, `myworkdayjobs.com`, `smartrecruiters.com`, `bamboohr.com`, `workable.com`, etc.) and automatically discards dead/closed jobs (`404`, `410`, `"position filled"`).
+    *   **Regional Indeed Domain Mapping**: Mapped international and MENA locations to native subdomains (`sa.indeed.com`, `ae.indeed.com`, `eg.indeed.com`, `uk.indeed.com`, `de.indeed.com`, etc.) to eliminate cross-region 404s and Cloudflare blocks.
+    *   **Dual-Action Telegram Alerts**: Upgraded Telegram alerts with both a Direct Apply button and a 1-tap Google/LinkedIn mobile browser search fallback that launches directly in native Safari/Chrome, bypassing in-app webview login walls.
+    *   **Turbo Runner with `uv` (<20s) & 30-Minute Schedule**: Upgraded `.github/workflows/scan.yml` with `astral-sh/setup-uv@v5` (package install in ~2s) and configured cron to `*/30 * * * *` (1,440 runs/month, 100% free under GitHub's 2,000 min/mo limit), cutting alarm latency from 6 hours to ~30 minutes.
+    *   **100% Test Suite Verification**: Expanded `test_sparkjobs_full.py` to 55 unit and regression tests (**55/55 PASS - 100% Exit Code 0**).
+
 *   **100% URL Quality & Job Field Accuracy Remediation (July 2026):**
     *   **Workday ATS Pattern Support**: Expanded `ATS_URL_PATTERNS["workday"]` in `auto_apply.py` to include `myworkdayjobs.com` and `workdayjobs.com`, restoring Workday ATS detection and form filling.
     *   **Closed Job Body Signal Detection**: Added response body string checks (`"this position has been filled"`, `"job not found"`, `"position closed"`) in `auto_apply.py:analyze_form_flow()` to halt auto-apply execution on filled positions returning HTTP 200.

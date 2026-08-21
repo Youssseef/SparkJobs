@@ -149,7 +149,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                     continue
 
                 # Pre-flight canonical URL resolution and liveness check
-                canonical_url, is_live, reason = resolve_canonical_url(raw_url)
+                canonical_url, is_live, reason = resolve_canonical_url(raw_url, location=location)
                 if not is_live:
                     print(f"Discarding dead or closed job ({reason}): {raw_url}")
                     continue

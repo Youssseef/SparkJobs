@@ -45,6 +45,51 @@ def normalize_linkedin_url(url: str) -> str:
         return f"https://www.linkedin.com/jobs/view/{job_id}"
     return url
 
+def normalize_indeed_url(url: str, location: str = "") -> str:
+    """
+    Normalizes Indeed URLs into HTTPS canonical direct job view format:
+    https://{subdomain}.indeed.com/viewjob?jk={jk_key}
+    Eliminates insecure HTTP slug paths, stripped jk prefixes, and cross-region 404s.
+    """
+    if not url or not isinstance(url, str) or "indeed.com" not in url.lower():
+        return url
+    
+    clean_url = re.sub(r'(?<=jk=)(?:indeed-|in-)', '', url, flags=re.IGNORECASE)
+    
+    jk_match = re.search(r'(?:jk=|/job/[^\s/?#]*-)([a-f0-9]{16,})', clean_url, re.IGNORECASE)
+    if not jk_match:
+        jk_match = re.search(r'(?:jk=|/job/[^\s/?#]*-)([a-f0-9]{8,})', clean_url, re.IGNORECASE)
+    
+    clean_jk = jk_match.group(1) if jk_match else ""
+    
+    subdomain_match = re.search(r'https?://([a-z]{2,3})\.indeed\.com', clean_url.lower())
+    if subdomain_match and subdomain_match.group(1) not in ["www", "m", "d"]:
+        domain = f"{subdomain_match.group(1)}.indeed.com"
+    else:
+        loc_lower = str(location or "").lower()
+        if "canada" in loc_lower or "ca" in loc_lower:
+            domain = "ca.indeed.com"
+        elif "saudi" in loc_lower or "ksa" in loc_lower:
+            domain = "sa.indeed.com"
+        elif "uae" in loc_lower or "emirates" in loc_lower or "dubai" in loc_lower:
+            domain = "ae.indeed.com"
+        elif "egypt" in loc_lower or "cairo" in loc_lower:
+            domain = "eg.indeed.com"
+        elif "uk" in loc_lower or "kingdom" in loc_lower or "london" in loc_lower:
+            domain = "uk.indeed.com"
+        elif "germany" in loc_lower or "berlin" in loc_lower or "de" in loc_lower:
+            domain = "de.indeed.com"
+        elif "france" in loc_lower or "paris" in loc_lower:
+            domain = "fr.indeed.com"
+        elif "australia" in loc_lower:
+            domain = "au.indeed.com"
+        else:
+            domain = "www.indeed.com"
+
+    if clean_jk:
+        return f"https://{domain}/viewjob?jk={clean_jk}"
+    return clean_url
+
 def build_search_fallback_url(company: str, title: str) -> str:
     """Constructs a 1-tap browser search fallback query to open in mobile Safari/Chrome."""
     clean_comp = re.sub(r'[\"\']', '', str(company or '').strip())
@@ -71,7 +116,7 @@ def extract_embedded_url(raw_url: str) -> str | None:
         pass
     return None
 
-def resolve_canonical_url(raw_url: str, timeout: int = 4) -> tuple[str, bool, str]:
+def resolve_canonical_url(raw_url: str, timeout: int = 4, location: str = "") -> tuple[str, bool, str]:
     """
     Unmasks tracking and aggregator links into direct canonical ATS URLs.
     Returns: (canonical_url, is_live, reason)
@@ -86,6 +131,10 @@ def resolve_canonical_url(raw_url: str, timeout: int = 4) -> tuple[str, bool, st
     # Fast path: LinkedIn URLs normalize to universal global job view
     if "linkedin.com" in clean_url.lower():
         return normalize_linkedin_url(clean_url), True, "canonical_linkedin"
+
+    # Fast path: Indeed URLs normalize to HTTPS canonical direct viewjob
+    if "indeed.com" in clean_url.lower():
+        return normalize_indeed_url(clean_url, location), True, "canonical_indeed"
 
     # Fast path: URL is already a verified ATS domain
     if is_ats_url(clean_url):

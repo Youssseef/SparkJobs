@@ -28,16 +28,25 @@ COVER_LETTER_PATH = os.path.join(BASE_DIR, "data", "cover_letter.txt")
 ATS_URL_PATTERNS = {
     "lever": ["jobs.lever.co"],
     "greenhouse": ["boards.greenhouse.io", "grnh.se", "job-boards.greenhouse.io"],
-    "smartrecruiters": ["careers.smartrecruiters.com"],
+    "smartrecruiters": ["careers.smartrecruiters.com", "smartrecruiters.com"],
+    "ashby": ["jobs.ashbyhq.com", "ashbyhq.com"],
+    "workable": ["apply.workable.com", "workable.com"],
+    "bamboohr": ["bamboohr.com", "bamboohr.co.uk"],
+    "recruitee": ["recruitee.com"],
+    "breezy": ["breezy.hr"],
+    "jobvite": ["jobs.jobvite.com", "jobvite.com"],
+    "workday": ["myworkdayjobs.com", "workdayjobs.com", ".workday.com/en-us/recruiting"],
     "linkedin": ["linkedin.com/jobs"],
     "indeed": ["indeed.com/viewjob", "indeed.com/jobs"],
-    "workday": ["myworkdayjobs.com", "workdayjobs.com", ".workday.com/en-us/recruiting"],
 }
 
 ATS_DOM_SIGNATURES = {
     "lever": ["[data-lever-source]", "#application-page"],
-    "greenhouse": ["#application.greenhouse-theme", "div.greenhouse"],
-    "smartrecruiters": [".smart-apply-widget"],
+    "greenhouse": ["#application.greenhouse-theme", "div.greenhouse", "#app_body"],
+    "smartrecruiters": [".smart-apply-widget", "st-apply"],
+    "ashby": ["#ashby_application", "[data-ashby-application-form]"],
+    "workable": ["#application_form", "[data-ui='application-form']"],
+    "bamboohr": ["#applicationForm", ".BambooHR-ATS-Jobs-Item"],
 }
 
 def detect_ats_platform_by_url(url: str) -> str:
@@ -289,13 +298,41 @@ async def analyze_form_flow(url: str):
                         field_item["ai_value"] = profile.get("linkedin_url", "")
                         field_item["confidence"] = 0.98
                         field_item["source"] = "user_profile"
-                    elif "portfolio" in label_clean:
+                    elif "portfolio" in label_clean or "website" in label_clean:
                         field_item["ai_value"] = profile.get("portfolio_url", "")
                         field_item["confidence"] = 0.98
                         field_item["source"] = "user_profile"
                     elif "github" in label_clean:
                         field_item["ai_value"] = profile.get("github_url", "")
                         field_item["confidence"] = 0.98
+                        field_item["source"] = "user_profile"
+                    elif "city" in label_clean or ("location" in label_clean and "country" not in label_clean):
+                        field_item["ai_value"] = profile.get("location_city", "") or profile.get("location", "")
+                        field_item["confidence"] = 0.95
+                        field_item["source"] = "user_profile"
+                    elif "country" in label_clean:
+                        field_item["ai_value"] = profile.get("location_country", "")
+                        field_item["confidence"] = 0.95
+                        field_item["source"] = "user_profile"
+                    elif "current title" in label_clean or "job title" in label_clean or "current role" in label_clean or label_clean == "title":
+                        field_item["ai_value"] = profile.get("current_title", "")
+                        field_item["confidence"] = 0.95
+                        field_item["source"] = "user_profile"
+                    elif "current company" in label_clean or "employer" in label_clean or "organization" in label_clean or label_clean == "company":
+                        field_item["ai_value"] = profile.get("current_company", "")
+                        field_item["confidence"] = 0.95
+                        field_item["source"] = "user_profile"
+                    elif "years of experience" in label_clean or "experience" in label_clean:
+                        field_item["ai_value"] = profile.get("experience_years", "")
+                        field_item["confidence"] = 0.90
+                        field_item["source"] = "user_profile"
+                    elif "notice" in label_clean or "start date" in label_clean:
+                        field_item["ai_value"] = profile.get("notice_period", "immediate")
+                        field_item["confidence"] = 0.90
+                        field_item["source"] = "user_profile"
+                    elif "sponsorship" in label_clean or "visa" in label_clean or "authorized" in label_clean or "authorization" in label_clean:
+                        field_item["ai_value"] = profile.get("sponsorship_required", "no")
+                        field_item["confidence"] = 0.90
                         field_item["source"] = "user_profile"
                     elif "resume" in label_clean or "cv" in label_clean or field_item["field_type"] == "file":
                         field_item["field_type"] = "file"

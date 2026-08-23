@@ -747,6 +747,18 @@ class TestSparkJobsSuite(unittest.TestCase):
             "https://ca.indeed.com/viewjob?jk=d62165e87874939b"
         )
 
+    def test_ats_url_patterns_expansion(self):
+        from auto_apply import detect_ats_platform_by_url
+        self.assertEqual(detect_ats_platform_by_url("https://jobs.ashbyhq.com/openai/123"), "ashby")
+        self.assertEqual(detect_ats_platform_by_url("https://apply.workable.com/spotify/j/456"), "workable")
+        self.assertEqual(detect_ats_platform_by_url("https://company.bamboohr.com/careers/789"), "bamboohr")
+        self.assertEqual(detect_ats_platform_by_url("https://careers.smartrecruiters.com/acme/999"), "smartrecruiters")
+        self.assertEqual(detect_ats_platform_by_url("https://company.recruitee.com/o/111"), "recruitee")
+        self.assertEqual(detect_ats_platform_by_url("https://company.breezy.hr/p/222"), "breezy")
+        self.assertEqual(detect_ats_platform_by_url("https://jobs.jobvite.com/company/job/333"), "jobvite")
+        self.assertEqual(detect_ats_platform_by_url("https://jobs.lever.co/stripe/444"), "lever")
+        self.assertEqual(detect_ats_platform_by_url("https://boards.greenhouse.io/figma/555"), "greenhouse")
+
     def test_rule_16_anti_god_component_line_counts(self):
         """Guarantees that all active Python files in src/ are strictly under the 400-line limit."""
         src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")

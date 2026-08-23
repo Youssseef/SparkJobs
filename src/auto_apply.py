@@ -180,8 +180,27 @@ async def analyze_form_flow(url: str):
             platform = detect_ats_platform_by_url(url)
             if platform == "generic":
                 platform = await detect_ats_platform_by_dom(page)
-            
-            # 2. CAPTCHA Check
+
+            # 2. Check rendered DOM for SPA closed/not found signals (e.g. Workday, Greenhouse, Lever)
+            dom_text = (await page.inner_text("body")).lower()
+            DOM_CLOSED_SIGNALS = [
+                "the page you are looking for doesn't exist",
+                "the page you are looking for does not exist",
+                "page not found",
+                "this position has been filled",
+                "this position is no longer available",
+                "position closed",
+                "job is no longer open",
+                "no longer accepting applications",
+                "job posting has expired",
+                "404 not found"
+            ]
+            if any(sig in dom_text for sig in DOM_CLOSED_SIGNALS):
+                write_error("This job posting is closed or no longer exists on the employer website.")
+                await browser.close()
+                return
+
+            # 3. CAPTCHA Check
             for cap_sel in ["iframe[src*='captcha']", "div.g-recaptcha", ".cf-turnstile", ".hcaptcha"]:
                 if await page.query_selector(cap_sel):
                     write_error("This application page requires a CAPTCHA. Please apply manually.")

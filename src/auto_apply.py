@@ -220,6 +220,30 @@ async def analyze_form_flow(url: str):
             
             # Standard Selector Mapping for Lever & Greenhouse
             input_elements = await page.query_selector_all("input, textarea, select")
+            
+            # If no visible input elements, try clicking the "Apply" / "Apply Now" CTA button
+            has_visible_input = False
+            for el in input_elements:
+                if await el.is_visible():
+                    has_visible_input = True
+                    break
+            
+            if not has_visible_input:
+                for apply_sel in [
+                    "a:has-text('Apply Now')", "button:has-text('Apply Now')",
+                    "a:has-text('Apply for this job')", "button:has-text('Apply for this job')",
+                    "a:has-text('Apply')", "button:has-text('Apply')",
+                    "[data-qa='apply-button']", ".apply-button", "#apply-button"
+                ]:
+                    apply_cta = await page.query_selector(apply_sel)
+                    if apply_cta and await apply_cta.is_visible():
+                        try:
+                            await apply_cta.click()
+                            await page.wait_for_timeout(3000)
+                            input_elements = await page.query_selector_all("input, textarea, select")
+                            break
+                        except Exception:
+                            pass
             for elem in input_elements:
                 try:
                     # Filter visible input elements
@@ -363,7 +387,11 @@ async def analyze_form_flow(url: str):
                 except Exception as inner_err:
                     print(f"Error scanning input element: {inner_err}")
 
-            # Write ready status
+            if len(fields) == 0:
+                write_error("No direct application form fields detected on this page. Please click 'Open Original Posting' to apply directly on the employer website.")
+                await browser.close()
+                return
+
             # Write ready status
             dir_name = os.path.dirname(FORM_ANALYSIS_PATH)
             os.makedirs(dir_name, exist_ok=True)

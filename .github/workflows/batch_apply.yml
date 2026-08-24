@@ -1,0 +1,71 @@
+name: SparkJobs — Batch Auto-Apply
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: 'SparkGen user ID for tracking'
+        required: true
+      jobs_json:
+        description: 'JSON array of target jobs'
+        required: true
+
+concurrency:
+  group: sparkjobs-batch-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  batch_apply:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Playwright browser
+        run: python -m playwright install chromium --with-deps
+
+      - name: Execute Batch Auto-Apply
+        run: |
+          cd src
+          python batch_apply.py --jobs-json='${{ github.event.inputs.jobs_json }}'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Upload batch confirmation screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-confirmations-${{ github.run_id }}
+          path: data/screenshots/
+          retention-days: 90
+
+      - name: Commit application_log.json and sync state
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: record batch applications in application_log.json"
+            for i in 1 2 3; do
+              git pull --rebase origin ${GITHUB_REF_NAME:-master} && git push origin HEAD:${GITHUB_REF_NAME:-master} && break || sleep 2
+            done
+          fi

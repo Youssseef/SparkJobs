@@ -5,9 +5,6 @@ on:
       user_id:
         description: 'SparkGen user ID for tracking'
         required: true
-      jobs_json:
-        description: 'JSON array of target jobs'
-        required: true
 
 concurrency:
   group: sparkjobs-batch-${{ github.ref }}
@@ -45,7 +42,7 @@ jobs:
       - name: Execute Batch Auto-Apply
         run: |
           cd src
-          python batch_apply.py --jobs-json='${{ github.event.inputs.jobs_json }}'
+          python batch_apply.py --jobs-file="../data/pending_batch.json"
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

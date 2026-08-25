@@ -301,10 +301,40 @@ async def run_batch(jobs_list: list):
         except Exception:
             pass
 
+    # Deduplication Guard: Load already applied URLs from application_log.json
+    applied_urls = set()
+    if os.path.exists(APPLICATION_LOG_PATH):
+        try:
+            with open(APPLICATION_LOG_PATH, "r", encoding="utf-8") as f:
+                log_data = json.load(f)
+                for app in log_data.get("applications", []):
+                    if app.get("status") == "applied" and app.get("job_url"):
+                        applied_urls.add(app["job_url"].strip())
+                    elif app.get("status") == "applied" and app.get("url"):
+                        applied_urls.add(app["url"].strip())
+        except Exception as e:
+            print(f"[Deduplication] Warning reading application_log.json: {e}")
+
+    # Filter out already applied jobs
+    filtered_jobs = []
+    for job in jobs_list:
+        job_url = (job.get("url") or "").strip()
+        if job_url and job_url in applied_urls:
+            print(f"[Deduplication] Skipping already applied job: {job.get('title')} at {job.get('company')}")
+            continue
+        filtered_jobs.append(job)
+
+    if len(filtered_jobs) < len(jobs_list):
+        print(f"[Deduplication] Filtered out {len(jobs_list) - len(filtered_jobs)} already applied jobs. Remaining in batch: {len(filtered_jobs)}")
+
+    if not filtered_jobs:
+        print("[Deduplication] All jobs in the current batch have already been applied to. Exiting cleanly.")
+        return
+
     # Build queue
     queue = asyncio.Queue()
-    for idx, job in enumerate(jobs_list):
-        queue.put_nowait((idx + 1, len(jobs_list), job))
+    for idx, job in enumerate(filtered_jobs):
+        queue.put_nowait((idx + 1, len(filtered_jobs), job))
 
     from playwright.async_api import async_playwright
 

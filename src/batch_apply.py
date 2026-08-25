@@ -102,6 +102,14 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
     if not url:
         return {"status": "failed", "reason": "Missing job URL"}
 
+    # Exclude login-walled portals
+    url_lower = url.lower()
+    if any(portal in url_lower for portal in [
+        "linkedin.com", "indeed.com", "myworkdayjobs.com", "workday.com",
+        "ziprecruiter.com", "glassdoor.com"
+    ]):
+        return {"status": "skipped", "reason": "Requires manual login/2FA on external portal (e.g. LinkedIn/Workday)"}
+
     # Fast Pre-Flight Check
     is_live = await asyncio.to_thread(preflight_check, url)
     if not is_live:
@@ -146,6 +154,10 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
                     if apply_btn and await apply_btn.is_visible():
                         href = await apply_btn.get_attribute("href")
                         if href and href.startswith("http"):
+                            # Check if external redirect leads to login wall
+                            href_lower = href.lower()
+                            if any(portal in href_lower for portal in ["linkedin.com", "indeed.com", "myworkdayjobs.com"]):
+                                return {"status": "skipped", "reason": "External apply redirects to login-walled portal"}
                             await domain_limiter.throttle(href)
                             await page.goto(href, wait_until="domcontentloaded", timeout=20000)
                             await page.wait_for_timeout(2000)
@@ -277,10 +289,30 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
                 if sub_btn and await sub_btn.is_visible():
                     await sub_btn.click()
                     submitted = True
-                    await page.wait_for_timeout(3000)
+                    await page.wait_for_timeout(4000)
                     break
             except Exception:
                 pass
+
+        if not submitted:
+            return {"status": "skipped", "reason": "Form fields filled but no direct ATS submit button found"}
+
+        # Verify post-submission confirmation
+        current_url = page.url.lower()
+        page_text = ""
+        try:
+            page_text = (await page.inner_text("body") or "").lower()
+        except Exception:
+            pass
+
+        is_confirmed = (
+            any(cue in current_url for cue in ["/confirm", "/thanks", "/applied", "/success", "/thank-you"]) or
+            any(cue in page_text for cue in [
+                "thank you for applying", "your application has been received",
+                "application submitted", "successfully submitted", "we have received your application",
+                "thanks for applying", "thank you for your application"
+            ])
+        )
 
         # Capture proof screenshot
         os.makedirs(os.path.join(BASE_DIR, "data", "screenshots"), exist_ok=True)
@@ -290,7 +322,10 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
         screenshot_full = os.path.join(BASE_DIR, "data", screenshot_rel)
         await page.screenshot(path=screenshot_full)
 
-        # Thread-safe log append
+        if not is_confirmed:
+            return {"status": "skipped", "reason": "Form submitted but confirmation state could not be verified", "screenshot": screenshot_rel}
+
+        # Thread-safe log append for genuinely confirmed applications
         async with log_lock:
             log_data = {"applications": []}
             if os.path.exists(APPLICATION_LOG_PATH):
@@ -315,7 +350,7 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
             with open(APPLICATION_LOG_PATH, "w", encoding="utf-8") as f:
                 json.dump(log_data, f, indent=2)
 
-        return {"status": "applied", "screenshot": screenshot_rel, "fields_filled": fields_filled, "submitted": submitted}
+        return {"status": "applied", "screenshot": screenshot_rel, "fields_filled": fields_filled, "submitted": True}
 
     except Exception as e:
         return {"status": "failed", "reason": str(e)}

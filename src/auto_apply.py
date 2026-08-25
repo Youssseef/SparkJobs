@@ -218,7 +218,21 @@ async def analyze_form_flow(url: str):
         page = await context.new_page()
         
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            except Exception as goto_err:
+                if "ERR_TOO_MANY_REDIRECTS" in str(goto_err):
+                    # LinkedIn cookie auth redirect loop - clear cookies and retry as guest
+                    await context.clear_cookies()
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                    except Exception as retry_err:
+                        write_error("LinkedIn requires direct login or manual application for this job posting.")
+                        await browser.close()
+                        return
+                else:
+                    raise goto_err
+
             await page.wait_for_timeout(3000) # Let page load dynamic components
             
             # Dismiss any LinkedIn / site overlay sign-in modals
@@ -237,6 +251,13 @@ async def analyze_form_flow(url: str):
                         break
                 except Exception:
                     pass
+
+            # Check for LinkedIn "Direct message the job poster" posts (no form available)
+            body_text_check = (await page.inner_text("body")).lower()
+            if "direct message the job poster" in body_text_check:
+                write_error("This job requires sending a direct message to the recruiter on LinkedIn. Please click 'Open Original Posting' to message them.")
+                await browser.close()
+                return
 
             # 1. ATS detection
             platform = detect_ats_platform_by_url(page.url)

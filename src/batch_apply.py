@@ -20,7 +20,7 @@ from telegram_sender import send_telegram_message, escape_html
 
 # Concurrency tuned specifically for GitHub Actions 2-vCPU / 7GB RAM runner
 CONCURRENT_WORKERS = 3
-JOB_TIMEOUT_SECONDS = 40
+JOB_TIMEOUT_SECONDS = 45
 
 # Tracker & heavy media domains to abort in Playwright route
 BLOCKED_TRACKERS = [
@@ -29,9 +29,27 @@ BLOCKED_TRACKERS = [
     "doubleclick.net", "segment.io", "intercom.io"
 ]
 
+STEALTH_SCRIPT = """
+// Erase webdriver flag
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+// Spoof Chrome runtime & plugins
+window.chrome = { runtime: {} };
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+
+// Spoof permissions query
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (parameters) => (
+    parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission }) :
+        originalQuery(parameters)
+);
+"""
+
 class DomainRateLimiter:
     """Thread/Task safe domain rate limiter to prevent hitting the same host simultaneously."""
-    def __init__(self, min_interval=3.0):
+    def __init__(self, min_interval=2.5):
         self.min_interval = min_interval
         self.last_accessed = {}
         self._lock = asyncio.Lock()
@@ -56,7 +74,7 @@ class DomainRateLimiter:
         if wait_time > 0:
             await asyncio.sleep(wait_time)
 
-domain_limiter = DomainRateLimiter(min_interval=3.0)
+domain_limiter = DomainRateLimiter(min_interval=2.5)
 log_lock = asyncio.Lock()
 
 def preflight_check(url: str) -> bool:
@@ -65,13 +83,12 @@ def preflight_check(url: str) -> bool:
         return False
     try:
         resp = requests.head(url, allow_redirects=True, timeout=5, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         })
         if resp.status_code in [404, 410]:
             return False
         return True
     except Exception:
-        # If HEAD fails or is blocked, let browser attempt
         return True
 
 async def setup_page_routes(page):
@@ -94,6 +111,73 @@ async def setup_page_routes(page):
 
     await page.route("**/*", route_handler)
 
+async def human_type(element, text: str):
+    """Types text into an input field with natural human keystroke jitter (25-55ms)."""
+    if not text or not element:
+        return
+    try:
+        await element.click()
+        await element.fill("")
+        for char in text:
+            await element.type(char, delay=random.uniform(25, 55))
+    except Exception:
+        try:
+            await element.fill(text)
+        except Exception:
+            pass
+
+async def apply_linkedin_easy_apply(page, profile: dict, cv_path: str) -> bool:
+    """Automates multi-step LinkedIn Easy Apply wizard."""
+    try:
+        easy_btn = await page.query_selector("button.jobs-apply-button, button:has-text('Easy Apply')")
+        if not easy_btn or not await easy_btn.is_visible():
+            return False
+
+        await easy_btn.click()
+        await page.wait_for_timeout(2000)
+
+        # Step through modal (up to 5 steps)
+        for _ in range(5):
+            # Check for file input (CV)
+            file_inputs = await page.query_selector_all("input[type='file']")
+            for fi in file_inputs:
+                if os.path.exists(cv_path):
+                    try:
+                        await fi.set_input_files(cv_path)
+                    except Exception:
+                        pass
+
+            # Fill text inputs
+            inputs = await page.query_selector_all("input[type='text'], textarea")
+            for inp in inputs:
+                try:
+                    val = await inp.input_value()
+                    if not val:
+                        aria = (await inp.get_attribute("aria-label") or "").lower()
+                        if "phone" in aria or "mobile" in aria:
+                            await human_type(inp, profile.get("phone", ""))
+                except Exception:
+                    pass
+
+            # Check if Submit button is available
+            sub_btn = await page.query_selector("button[aria-label*='Submit application'], button:has-text('Submit application')")
+            if sub_btn and await sub_btn.is_visible():
+                await sub_btn.click()
+                await page.wait_for_timeout(4000)
+                return True
+
+            # Advance next step
+            next_btn = await page.query_selector("button[aria-label*='Continue to next step'], button:has-text('Next'), button:has-text('Review')")
+            if next_btn and await next_btn.is_visible():
+                await next_btn.click()
+                await page.wait_for_timeout(1500)
+            else:
+                break
+
+        return False
+    except Exception:
+        return False
+
 async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict) -> dict:
     url = job.get("url", "")
     job_title = job.get("title", "Job Posting")
@@ -102,18 +186,28 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
     if not url:
         return {"status": "failed", "reason": "Missing job URL"}
 
-    # Exclude login-walled portals
     url_lower = url.lower()
-    if any(portal in url_lower for portal in [
-        "linkedin.com", "indeed.com", "myworkdayjobs.com", "workday.com",
-        "ziprecruiter.com", "glassdoor.com"
-    ]):
-        return {"status": "skipped", "reason": "Requires manual login/2FA on external portal (e.g. LinkedIn/Workday)"}
 
     # Fast Pre-Flight Check
     is_live = await asyncio.to_thread(preflight_check, url)
     if not is_live:
         return {"status": "skipped", "reason": "Link expired or closed (404/410)"}
+
+    # Inject LinkedIn Cookie if visiting LinkedIn
+    li_cookie = (profile.get("linkedin_cookie") or os.environ.get("LINKEDIN_COOKIE") or "").strip()
+    if "linkedin.com" in url_lower and li_cookie:
+        try:
+            clean_cookie = li_cookie.replace("li_at=", "").strip()
+            await context.add_cookies([{
+                "name": "li_at",
+                "value": clean_cookie,
+                "domain": ".linkedin.com",
+                "path": "/",
+                "httpOnly": True,
+                "secure": True
+            }])
+        except Exception:
+            pass
 
     # Host-level rate limiting
     await domain_limiter.throttle(url)
@@ -124,12 +218,70 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
         await page.goto(url, wait_until="domcontentloaded", timeout=25000)
         await page.wait_for_timeout(2000)
 
+        # Resolve CV path
+        cv_name = profile.get("cv_filename", "default_cv.pdf")
+        workspace = os.environ.get("GITHUB_WORKSPACE", BASE_DIR)
+        cv_path = os.path.join(workspace, "data", "cvs", cv_name)
+        if not os.path.exists(cv_path):
+            cv_dir = os.path.join(workspace, "data", "cvs")
+            if os.path.exists(cv_dir):
+                cv_files = [f for f in os.listdir(cv_dir) if f.endswith(('.pdf', '.docx', '.doc'))]
+                if cv_files:
+                    cv_path = os.path.join(cv_dir, cv_files[0])
+
         # Check for CAPTCHA
         for cap_sel in ["iframe[src*='captcha']", "div.g-recaptcha", ".cf-turnstile", ".hcaptcha"]:
             if await page.query_selector(cap_sel):
                 return {"status": "skipped", "reason": "Requires CAPTCHA (manual apply required)"}
 
-        # Check for external apply button or navigate into application form
+        # LinkedIn Handling (Easy Apply or ATS Unmasking)
+        if "linkedin.com" in url_lower:
+            # Check for native Easy Apply
+            easy_btn = await page.query_selector("button.jobs-apply-button, button:has-text('Easy Apply')")
+            if easy_btn and li_cookie:
+                success = await apply_linkedin_easy_apply(page, profile, cv_path)
+                if success:
+                    os.makedirs(os.path.join(BASE_DIR, "data", "screenshots"), exist_ok=True)
+                    timestamp = int(time.time())
+                    rand_id = random.randint(100, 999)
+                    screenshot_rel = f"screenshots/confirm_{timestamp}_{rand_id}.png"
+                    screenshot_full = os.path.join(BASE_DIR, "data", screenshot_rel)
+                    await page.screenshot(path=screenshot_full)
+                    
+                    async with log_lock:
+                        log_data = {"applications": []}
+                        if os.path.exists(APPLICATION_LOG_PATH):
+                            try:
+                                with open(APPLICATION_LOG_PATH, "r", encoding="utf-8") as f:
+                                    log_data = json.load(f)
+                            except Exception:
+                                pass
+                        log_data["applications"].append({
+                            "id": f"batch-{timestamp}-{rand_id}",
+                            "job_url": url,
+                            "job_title": job_title,
+                            "company": company,
+                            "ats_platform": "linkedin_easy_apply",
+                            "status": "applied",
+                            "applied_at": datetime.utcnow().isoformat() + "Z",
+                            "screenshot_artifact_url": screenshot_rel
+                        })
+                        with open(APPLICATION_LOG_PATH, "w", encoding="utf-8") as f:
+                            json.dump(log_data, f, indent=2)
+                    return {"status": "applied", "screenshot": screenshot_rel, "fields_filled": 3, "submitted": True}
+
+            # If not Easy Apply, check for external ATS redirect link (Unmasking)
+            ext_link = await page.query_selector("a[data-tracking-control-name*='apply'], a.apply-button, a:has-text('Apply on company website')")
+            if ext_link and await ext_link.is_visible():
+                href = await ext_link.get_attribute("href")
+                if href and href.startswith("http"):
+                    await domain_limiter.throttle(href)
+                    await page.goto(href, wait_until="domcontentloaded", timeout=20000)
+                    await page.wait_for_timeout(2000)
+            else:
+                return {"status": "skipped", "reason": "Requires manual LinkedIn login"}
+
+        # Direct ATS Form Handling (Lever, Greenhouse, Ashby, Workable, SmartRecruiters)
         input_elements = await page.query_selector_all("input, textarea, select")
         has_visible_inputs = False
         if input_elements:
@@ -154,7 +306,6 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
                     if apply_btn and await apply_btn.is_visible():
                         href = await apply_btn.get_attribute("href")
                         if href and href.startswith("http"):
-                            # Check if external redirect leads to login wall
                             href_lower = href.lower()
                             if any(portal in href_lower for portal in ["linkedin.com", "indeed.com", "myworkdayjobs.com"]):
                                 return {"status": "skipped", "reason": "External apply redirects to login-walled portal"}
@@ -175,17 +326,6 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
 
         # Scan and fill form fields
         fields_filled = 0
-
-        # Resolve CV path
-        cv_name = profile.get("cv_filename", "default_cv.pdf")
-        workspace = os.environ.get("GITHUB_WORKSPACE", BASE_DIR)
-        cv_path = os.path.join(workspace, "data", "cvs", cv_name)
-        if not os.path.exists(cv_path):
-            cv_dir = os.path.join(workspace, "data", "cvs")
-            if os.path.exists(cv_dir):
-                cv_files = [f for f in os.listdir(cv_dir) if f.endswith(('.pdf', '.docx', '.doc'))]
-                if cv_files:
-                    cv_path = os.path.join(cv_dir, cv_files[0])
 
         for elem in input_elements:
             try:
@@ -210,50 +350,50 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
 
                 label_text = f"{name_attr} {id_attr} {placeholder} {aria_label}"
 
-                # Field mappings
+                # Field mappings with human typing jitter
                 if any(k in label_text for k in ["first_name", "firstname", "first name", "given_name"]):
                     val = profile.get("full_name", "").split()[0] if profile.get("full_name") else ""
-                    await elem.fill(val)
+                    await human_type(elem, val)
                     fields_filled += 1
                 elif any(k in label_text for k in ["last_name", "lastname", "last name", "family_name", "surname"]):
                     val = " ".join(profile.get("full_name", "").split()[1:]) if len(profile.get("full_name", "").split()) > 1 else ""
-                    await elem.fill(val)
+                    await human_type(elem, val)
                     fields_filled += 1
                 elif any(k in label_text for k in ["name", "full_name", "fullname", "candidate_name"]):
-                    await elem.fill(profile.get("full_name", ""))
+                    await human_type(elem, profile.get("full_name", ""))
                     fields_filled += 1
                 elif "email" in label_text:
-                    await elem.fill(profile.get("email", ""))
+                    await human_type(elem, profile.get("email", ""))
                     fields_filled += 1
                 elif any(k in label_text for k in ["phone", "mobile", "tel", "contact_number"]):
-                    await elem.fill(profile.get("phone", ""))
+                    await human_type(elem, profile.get("phone", ""))
                     fields_filled += 1
                 elif "linkedin" in label_text:
-                    await elem.fill(profile.get("linkedin_url", ""))
+                    await human_type(elem, profile.get("linkedin_url", ""))
                     fields_filled += 1
                 elif "github" in label_text:
-                    await elem.fill(profile.get("github_url", ""))
+                    await human_type(elem, profile.get("github_url", ""))
                     fields_filled += 1
                 elif any(k in label_text for k in ["portfolio", "website", "personal_url", "site"]):
-                    await elem.fill(profile.get("portfolio_url", ""))
+                    await human_type(elem, profile.get("portfolio_url", ""))
                     fields_filled += 1
                 elif any(k in label_text for k in ["city", "town"]):
-                    await elem.fill(profile.get("location_city", profile.get("city", "")))
+                    await human_type(elem, profile.get("location_city", profile.get("city", "")))
                     fields_filled += 1
                 elif any(k in label_text for k in ["country", "state", "region"]):
-                    await elem.fill(profile.get("location_country", profile.get("country", "")))
+                    await human_type(elem, profile.get("location_country", profile.get("country", "")))
                     fields_filled += 1
                 elif any(k in label_text for k in ["company", "current_company", "employer"]):
-                    await elem.fill(profile.get("current_company", ""))
+                    await human_type(elem, profile.get("current_company", ""))
                     fields_filled += 1
                 elif any(k in label_text for k in ["title", "current_title", "job_title", "headline"]):
-                    await elem.fill(profile.get("current_title", ""))
+                    await human_type(elem, profile.get("current_title", ""))
                     fields_filled += 1
                 elif any(k in label_text for k in ["experience", "years_of_experience", "years_experience"]):
-                    await elem.fill(str(profile.get("experience_years", "3-5")))
+                    await human_type(elem, str(profile.get("experience_years", "3-5")))
                     fields_filled += 1
                 elif any(k in label_text for k in ["notice", "notice_period", "availability"]):
-                    await elem.fill(profile.get("notice_period", "Immediate"))
+                    await human_type(elem, profile.get("notice_period", "Immediate"))
                     fields_filled += 1
                 elif any(k in label_text for k in ["sponsorship", "visa", "authorized"]):
                     sponsorship_val = profile.get("sponsorship_required", "no")
@@ -268,7 +408,7 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
                                     fields_filled += 1
                                     break
                     else:
-                        await elem.fill("No" if sponsorship_val == "no" else "Yes")
+                        await human_type(elem, "No" if sponsorship_val == "no" else "Yes")
                         fields_filled += 1
             except Exception:
                 pass
@@ -357,9 +497,20 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
     finally:
         await page.close()
 
-async def worker_loop(worker_id: int, queue: asyncio.Queue, browser, profile: dict, learned_dict: dict, results: list):
-    """Worker task processing jobs from shared queue."""
-    context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+async def worker_loop(worker_id: int, queue: asyncio.Queue, browser, profile: dict, learned_dict: dict, results: list, proxy_url: str = ""):
+    """Worker task processing jobs from shared queue with Stealth Armor."""
+    context_options = {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "viewport": {"width": 1280, "height": 800},
+        "locale": "en-US",
+        "timezone_id": "America/New_York",
+    }
+    if proxy_url:
+        context_options["proxy"] = {"server": proxy_url}
+
+    context = await browser.new_context(**context_options)
+    await context.add_init_script(STEALTH_SCRIPT)
+
     try:
         while True:
             try:
@@ -402,7 +553,7 @@ async def run_batch(jobs_list: list):
         except Exception:
             pass
 
-    # Deduplication Guard: Load already applied URLs from application_log.json
+    # Deduplication Guard
     applied_urls = set()
     if os.path.exists(APPLICATION_LOG_PATH):
         try:
@@ -416,7 +567,6 @@ async def run_batch(jobs_list: list):
         except Exception as e:
             print(f"[Deduplication] Warning reading application_log.json: {e}")
 
-    # Filter out already applied jobs
     filtered_jobs = []
     for job in jobs_list:
         job_url = (job.get("url") or "").strip()
@@ -426,13 +576,16 @@ async def run_batch(jobs_list: list):
         filtered_jobs.append(job)
 
     if len(filtered_jobs) < len(jobs_list):
-        print(f"[Deduplication] Filtered out {len(jobs_list) - len(filtered_jobs)} already applied jobs. Remaining in batch: {len(filtered_jobs)}")
+        print(f"[Deduplication] Filtered out {len(jobs_list) - len(filtered_jobs)} already applied jobs. Remaining: {len(filtered_jobs)}")
 
     if not filtered_jobs:
         print("[Deduplication] All jobs in the current batch have already been applied to. Exiting cleanly.")
         return
 
-    # Build queue
+    # Check for ScraperAPI proxy key
+    scraperapi_key = os.environ.get("SCRAPERAPI_KEY", "")
+    proxy_url = f"http://scraperapi:{scraperapi_key}@proxy-server.scraperapi.com:8001" if scraperapi_key else ""
+
     queue = asyncio.Queue()
     for idx, job in enumerate(filtered_jobs):
         queue.put_nowait((idx + 1, len(filtered_jobs), job))
@@ -443,10 +596,17 @@ async def run_batch(jobs_list: list):
     start_time = time.time()
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage"
+            ]
+        )
 
         workers = [
-            asyncio.create_task(worker_loop(i + 1, queue, browser, profile, learned_dict, results))
+            asyncio.create_task(worker_loop(i + 1, queue, browser, profile, learned_dict, results, proxy_url))
             for i in range(CONCURRENT_WORKERS)
         ]
 
@@ -480,30 +640,19 @@ async def run_batch(jobs_list: list):
     print(f"Batch completed in {elapsed}s. Applied: {applied_count}, Skipped: {skipped_count}, Failed: {failed_count}")
 
 def main():
-    parser = argparse.ArgumentParser(description="SparkJobs High-Performance Batch Auto-Apply Runner")
-    parser.add_argument("--jobs-json", type=str, help="JSON array string of target jobs")
-    parser.add_argument("--jobs-file", type=str, help="Path to JSON file containing target jobs")
+    parser = argparse.ArgumentParser(description="SparkJobs Batch Auto-Apply Engine")
+    parser.add_argument("--jobs-file", default=os.path.join(BASE_DIR, "data", "jobs_feed.json"))
     args = parser.parse_args()
 
-    jobs = []
-    if args.jobs_json:
-        try:
-            jobs = json.loads(args.jobs_json)
-        except Exception as e:
-            print(f"Failed to parse --jobs-json: {e}")
-            return
-    elif args.jobs_file and os.path.exists(args.jobs_file):
-        try:
-            with open(args.jobs_file, "r", encoding="utf-8") as f:
-                jobs = json.load(f)
-        except Exception as e:
-            print(f"Failed to read --jobs-file: {e}")
-            return
-
-    if not jobs:
-        print("No jobs provided for batch apply.")
+    if not os.path.exists(args.jobs_file):
+        print(f"Jobs file not found: {args.jobs_file}")
         return
 
+    with open(args.jobs_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    jobs = data if isinstance(data, list) else data.get("jobs", [])
+    print(f"Loaded {len(jobs)} jobs for batch application...")
     asyncio.run(run_batch(jobs))
 
 if __name__ == "__main__":

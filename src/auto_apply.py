@@ -49,6 +49,19 @@ ATS_DOM_SIGNATURES = {
     "bamboohr": ["#applicationForm", ".BambooHR-ATS-Jobs-Item"],
 }
 
+STEALTH_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+window.chrome = { runtime: {} };
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (parameters) => (
+    parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission }) :
+        originalQuery(parameters)
+);
+"""
+
 def detect_ats_platform_by_url(url: str) -> str:
     url_lower = url.lower()
     for platform, patterns in ATS_URL_PATTERNS.items():
@@ -168,12 +181,18 @@ async def analyze_form_flow(url: str):
     from playwright.async_api import async_playwright
     
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"]
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
+        await context.add_init_script(STEALTH_SCRIPT)
         page = await context.new_page()
         
         try:
-            await page.goto(url, wait_until="domcontentloaded")
+            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
             await page.wait_for_timeout(3000) # Let page load dynamic components
             
             # 1. ATS detection
@@ -240,7 +259,7 @@ async def analyze_form_flow(url: str):
             # Standard Selector Mapping for Lever & Greenhouse
             input_elements = await page.query_selector_all("input, textarea, select")
             
-            # If no visible input elements, try clicking the "Apply" / "Apply Now" CTA button
+            # If no visible input elements, try clicking or following the "Apply" / "Apply Now" CTA button
             has_visible_input = False
             for el in input_elements:
                 if await el.is_visible():
@@ -251,14 +270,21 @@ async def analyze_form_flow(url: str):
                 for apply_sel in [
                     "a:has-text('Apply Now')", "button:has-text('Apply Now')",
                     "a:has-text('Apply for this job')", "button:has-text('Apply for this job')",
+                    "a:has-text('Apply on company website')", "a:has-text('Apply on employer website')",
                     "a:has-text('Apply')", "button:has-text('Apply')",
-                    "[data-qa='apply-button']", ".apply-button", "#apply-button"
+                    "[data-qa='apply-button']", ".apply-button", "#apply-button",
+                    "a[data-tracking-control-name*='apply']", "a[href*='lever.co']", "a[href*='greenhouse.io']"
                 ]:
                     apply_cta = await page.query_selector(apply_sel)
                     if apply_cta and await apply_cta.is_visible():
                         try:
-                            await apply_cta.click()
-                            await page.wait_for_timeout(3000)
+                            href = await apply_cta.get_attribute("href")
+                            if href and href.startswith("http"):
+                                await page.goto(href, wait_until="domcontentloaded", timeout=20000)
+                                await page.wait_for_timeout(3000)
+                            else:
+                                await apply_cta.click()
+                                await page.wait_for_timeout(3000)
                             input_elements = await page.query_selector_all("input, textarea, select")
                             break
                         except Exception:

@@ -121,20 +121,29 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
             if await page.query_selector(cap_sel):
                 return {"status": "skipped", "reason": "Requires CAPTCHA (manual apply required)"}
 
-        # Check for external apply button (LinkedIn, Indeed, WWR)
+        # Check for external apply button or navigate into application form
         input_elements = await page.query_selector_all("input, textarea, select")
-        has_visible_inputs = any(await el.is_visible() for el in input_elements) if input_elements else False
+        has_visible_inputs = False
+        if input_elements:
+            for el in input_elements:
+                try:
+                    if await el.is_visible():
+                        has_visible_inputs = True
+                        break
+                except Exception:
+                    pass
 
         if not has_visible_inputs:
             for apply_sel in [
                 "a:has-text('Apply Now')", "button:has-text('Apply Now')",
                 "a:has-text('Apply on company website')", "a:has-text('Apply for this job')",
                 "button:has-text('Apply for this job')", "a:has-text('Apply')",
-                "button:has-text('Apply')", "[data-qa='apply-button']", ".apply-button", "#apply-button"
+                "button:has-text('Apply')", "[data-qa='apply-button']", ".apply-button", "#apply-button",
+                "a[href*='apply']", "button[id*='apply']"
             ]:
-                apply_btn = await page.query_selector(apply_sel)
-                if apply_btn and await apply_btn.is_visible():
-                    try:
+                try:
+                    apply_btn = await page.query_selector(apply_sel)
+                    if apply_btn and await apply_btn.is_visible():
                         href = await apply_btn.get_attribute("href")
                         if href and href.startswith("http"):
                             await domain_limiter.throttle(href)
@@ -145,12 +154,26 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
                             await page.wait_for_timeout(2000)
                         input_elements = await page.query_selector_all("input, textarea, select")
                         break
-                    except Exception:
-                        pass
+                except Exception:
+                    pass
+
+        input_elements = await page.query_selector_all("input, textarea, select")
+        if not input_elements:
+            return {"status": "skipped", "reason": "No direct ATS application form detected on page"}
 
         # Scan and fill form fields
-        input_elements = await page.query_selector_all("input, textarea, select")
         fields_filled = 0
+
+        # Resolve CV path
+        cv_name = profile.get("cv_filename", "default_cv.pdf")
+        workspace = os.environ.get("GITHUB_WORKSPACE", BASE_DIR)
+        cv_path = os.path.join(workspace, "data", "cvs", cv_name)
+        if not os.path.exists(cv_path):
+            cv_dir = os.path.join(workspace, "data", "cvs")
+            if os.path.exists(cv_dir):
+                cv_files = [f for f in os.listdir(cv_dir) if f.endswith(('.pdf', '.docx', '.doc'))]
+                if cv_files:
+                    cv_path = os.path.join(cv_dir, cv_files[0])
 
         for elem in input_elements:
             try:
@@ -161,38 +184,36 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
                 name_attr = (await elem.get_attribute("name") or "").lower()
                 id_attr = (await elem.get_attribute("id") or "").lower()
                 placeholder = (await elem.get_attribute("placeholder") or "").lower()
+                aria_label = (await elem.get_attribute("aria-label") or "").lower()
 
-                if input_type in ["hidden", "submit", "button"]:
+                if input_type in ["hidden", "submit", "button", "reset"]:
                     continue
 
                 # File upload (CV / Resume)
                 if input_type == "file":
-                    cv_name = profile.get("cv_filename", "default_cv.pdf")
-                    workspace = os.environ.get("GITHUB_WORKSPACE", BASE_DIR)
-                    cv_path = os.path.join(workspace, "data", "cvs", cv_name)
                     if os.path.exists(cv_path):
                         await elem.set_input_files(cv_path)
                         fields_filled += 1
                     continue
 
-                label_text = f"{name_attr} {id_attr} {placeholder}"
+                label_text = f"{name_attr} {id_attr} {placeholder} {aria_label}"
 
                 # Field mappings
-                if any(k in label_text for k in ["first_name", "firstname", "first name"]):
+                if any(k in label_text for k in ["first_name", "firstname", "first name", "given_name"]):
                     val = profile.get("full_name", "").split()[0] if profile.get("full_name") else ""
                     await elem.fill(val)
                     fields_filled += 1
-                elif any(k in label_text for k in ["last_name", "lastname", "last name"]):
+                elif any(k in label_text for k in ["last_name", "lastname", "last name", "family_name", "surname"]):
                     val = " ".join(profile.get("full_name", "").split()[1:]) if len(profile.get("full_name", "").split()) > 1 else ""
                     await elem.fill(val)
                     fields_filled += 1
-                elif any(k in label_text for k in ["name", "full_name", "fullname"]):
+                elif any(k in label_text for k in ["name", "full_name", "fullname", "candidate_name"]):
                     await elem.fill(profile.get("full_name", ""))
                     fields_filled += 1
                 elif "email" in label_text:
                     await elem.fill(profile.get("email", ""))
                     fields_filled += 1
-                elif any(k in label_text for k in ["phone", "mobile", "tel"]):
+                elif any(k in label_text for k in ["phone", "mobile", "tel", "contact_number"]):
                     await elem.fill(profile.get("phone", ""))
                     fields_filled += 1
                 elif "linkedin" in label_text:
@@ -201,18 +222,63 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
                 elif "github" in label_text:
                     await elem.fill(profile.get("github_url", ""))
                     fields_filled += 1
-                elif any(k in label_text for k in ["portfolio", "website", "url"]):
+                elif any(k in label_text for k in ["portfolio", "website", "personal_url", "site"]):
                     await elem.fill(profile.get("portfolio_url", ""))
                     fields_filled += 1
-                elif any(k in label_text for k in ["city", "location", "address"]):
-                    await elem.fill(profile.get("city", profile.get("location", "")))
+                elif any(k in label_text for k in ["city", "town"]):
+                    await elem.fill(profile.get("location_city", profile.get("city", "")))
                     fields_filled += 1
-                elif any(k in label_text for k in ["company", "current_company"]):
+                elif any(k in label_text for k in ["country", "state", "region"]):
+                    await elem.fill(profile.get("location_country", profile.get("country", "")))
+                    fields_filled += 1
+                elif any(k in label_text for k in ["company", "current_company", "employer"]):
                     await elem.fill(profile.get("current_company", ""))
                     fields_filled += 1
-                elif any(k in label_text for k in ["title", "current_title", "job_title"]):
+                elif any(k in label_text for k in ["title", "current_title", "job_title", "headline"]):
                     await elem.fill(profile.get("current_title", ""))
                     fields_filled += 1
+                elif any(k in label_text for k in ["experience", "years_of_experience", "years_experience"]):
+                    await elem.fill(str(profile.get("experience_years", "3-5")))
+                    fields_filled += 1
+                elif any(k in label_text for k in ["notice", "notice_period", "availability"]):
+                    await elem.fill(profile.get("notice_period", "Immediate"))
+                    fields_filled += 1
+                elif any(k in label_text for k in ["sponsorship", "visa", "authorized"]):
+                    sponsorship_val = profile.get("sponsorship_required", "no")
+                    if elem.tag_name.lower() == "select":
+                        options = await elem.query_selector_all("option")
+                        for opt in options:
+                            opt_text = (await opt.inner_text()).lower()
+                            if ("no" in opt_text and sponsorship_val == "no") or ("yes" in opt_text and sponsorship_val == "yes"):
+                                opt_val = await opt.get_attribute("value")
+                                if opt_val is not None:
+                                    await elem.select_option(value=opt_val)
+                                    fields_filled += 1
+                                    break
+                    else:
+                        await elem.fill("No" if sponsorship_val == "no" else "Yes")
+                        fields_filled += 1
+            except Exception:
+                pass
+
+        if fields_filled == 0:
+            return {"status": "skipped", "reason": "Application form detected but no standard fields could be mapped"}
+
+        # Attempt submission click
+        submitted = False
+        for sub_sel in [
+            "button[type='submit']", "input[type='submit']",
+            "button:has-text('Submit Application')", "button:has-text('Submit application')",
+            "button:has-text('Submit')", "button:has-text('Apply Now')",
+            "#btn-submit", "#submit-application", "button.submit-button"
+        ]:
+            try:
+                sub_btn = await page.query_selector(sub_sel)
+                if sub_btn and await sub_btn.is_visible():
+                    await sub_btn.click()
+                    submitted = True
+                    await page.wait_for_timeout(3000)
+                    break
             except Exception:
                 pass
 
@@ -249,7 +315,7 @@ async def apply_single_job(context, job: dict, profile: dict, learned_dict: dict
             with open(APPLICATION_LOG_PATH, "w", encoding="utf-8") as f:
                 json.dump(log_data, f, indent=2)
 
-        return {"status": "applied", "screenshot": screenshot_rel, "fields_filled": fields_filled}
+        return {"status": "applied", "screenshot": screenshot_rel, "fields_filled": fields_filled, "submitted": submitted}
 
     except Exception as e:
         return {"status": "failed", "reason": str(e)}

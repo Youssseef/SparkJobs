@@ -177,6 +177,15 @@ async def analyze_form_flow(url: str):
         write_error(f"Job application URL is unreachable: {e}")
         return
 
+async def analyze_form_flow(url: str):
+    if not os.path.exists(USER_PROFILE_PATH):
+        write_error("Auto-Apply Profile not set up. Please complete your profile in the dashboard first.")
+        return
+
+    # Read user profile and learned answers early for cookie injection
+    with open(USER_PROFILE_PATH, "r", encoding="utf-8") as f:
+        profile = json.load(f)
+
     # Import Playwright dynamically
     from playwright.async_api import async_playwright
     
@@ -189,18 +198,52 @@ async def analyze_form_flow(url: str):
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         )
         await context.add_init_script(STEALTH_SCRIPT)
+
+        # Inject LinkedIn Cookie if visiting LinkedIn
+        li_cookie = (profile.get("linkedin_cookie") or os.environ.get("LINKEDIN_COOKIE") or "").strip()
+        if "linkedin.com" in url.lower() and li_cookie:
+            try:
+                clean_cookie = li_cookie.replace("li_at=", "").strip()
+                await context.add_cookies([{
+                    "name": "li_at",
+                    "value": clean_cookie,
+                    "domain": ".linkedin.com",
+                    "path": "/",
+                    "httpOnly": True,
+                    "secure": True
+                }])
+            except Exception:
+                pass
+
         page = await context.new_page()
         
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=25000)
             await page.wait_for_timeout(3000) # Let page load dynamic components
             
+            # Dismiss any LinkedIn / site overlay sign-in modals
+            for dismiss_sel in [
+                "button[aria-label='Dismiss']",
+                ".contextual-sign-in-modal__modal-dismiss-btn",
+                "button.modal__dismiss",
+                "[data-modal-dismiss-btn]",
+                ".artdeco-modal__dismiss"
+            ]:
+                try:
+                    dismiss_btn = await page.query_selector(dismiss_sel)
+                    if dismiss_btn and await dismiss_btn.is_visible():
+                        await dismiss_btn.click()
+                        await page.wait_for_timeout(1000)
+                        break
+                except Exception:
+                    pass
+
             # 1. ATS detection
-            platform = detect_ats_platform_by_url(url)
+            platform = detect_ats_platform_by_url(page.url)
             if platform == "generic":
                 platform = await detect_ats_platform_by_dom(page)
 
-            # 2. Check rendered DOM for SPA closed/not found signals (e.g. Workday, Greenhouse, Lever)
+            # 2. Check rendered DOM for SPA closed/not found signals
             dom_text = (await page.inner_text("body")).lower()
             DOM_CLOSED_SIGNALS = [
                 "the page you are looking for doesn't exist",
@@ -232,10 +275,6 @@ async def analyze_form_flow(url: str):
                     os.remove(PENDING_SUBMISSION_PATH)
                 except OSError:
                     pass
-
-            # Read user profile and learned answers
-            with open(USER_PROFILE_PATH, "r", encoding="utf-8") as f:
-                profile = json.load(f)
             
             learned = {"answers": []}
             if os.path.exists(LEARNED_ANSWERS_PATH):
@@ -247,24 +286,56 @@ async def analyze_form_flow(url: str):
             
             learned_dict = {a["question_hash"]: a["answer"] for a in learned.get("answers", [])}
 
+            # 4. LinkedIn ATS Unmasking & Redirect Following
+            if "linkedin.com" in page.url.lower():
+                for apply_sel in [
+                    "a[data-tracking-control-name*='apply']",
+                    "a.apply-button",
+                    "a:has-text('Apply on company website')",
+                    "a:has-text('Apply on employer website')",
+                    "a:has-text('Apply')",
+                    "a[href*='lever.co']",
+                    "a[href*='greenhouse.io']",
+                    "a[href*='ashbyhq.com']",
+                    "a[href*='workable.com']"
+                ]:
+                    try:
+                        apply_cta = await page.query_selector(apply_sel)
+                        if apply_cta and await apply_cta.is_visible():
+                            href = await apply_cta.get_attribute("href")
+                            if href and href.startswith("http") and "linkedin.com" not in href.lower():
+                                await page.goto(href, wait_until="domcontentloaded", timeout=20000)
+                                await page.wait_for_timeout(3000)
+                                break
+                            else:
+                                await apply_cta.click()
+                                await page.wait_for_timeout(3000)
+                                break
+                    except Exception:
+                        pass
+
             # Gather page content description for cover letter matching
+            page_html = await page.content()
             soup = BeautifulSoup(page_html, "html.parser")
-            body_text = soup.get_text()[:4000] # Limit size for token budget
+            body_text = soup.get_text()[:4000]
             job_title = soup.title.string if soup.title else "Job Posting"
 
-            # Parse Form Fields (multi-page scan stub)
+            # Parse Form Fields
             fields = []
             page_index = 0
             
-            # Standard Selector Mapping for Lever & Greenhouse
             input_elements = await page.query_selector_all("input, textarea, select")
             
-            # If no visible input elements, try clicking or following the "Apply" / "Apply Now" CTA button
+            # If no visible input elements on direct page, try clicking "Apply" / "Apply Now" CTA button
             has_visible_input = False
             for el in input_elements:
-                if await el.is_visible():
-                    has_visible_input = True
-                    break
+                try:
+                    name_check = (await el.get_attribute("name") or "").lower()
+                    if name_check not in ["keywords", "location", "search", "search_term", "q", "query"] and await el.is_visible():
+                        has_visible_input = True
+                        break
+                except Exception:
+                    pass
             
             if not has_visible_input:
                 for apply_sel in [
@@ -275,11 +346,11 @@ async def analyze_form_flow(url: str):
                     "[data-qa='apply-button']", ".apply-button", "#apply-button",
                     "a[data-tracking-control-name*='apply']", "a[href*='lever.co']", "a[href*='greenhouse.io']"
                 ]:
-                    apply_cta = await page.query_selector(apply_sel)
-                    if apply_cta and await apply_cta.is_visible():
-                        try:
+                    try:
+                        apply_cta = await page.query_selector(apply_sel)
+                        if apply_cta and await apply_cta.is_visible():
                             href = await apply_cta.get_attribute("href")
-                            if href and href.startswith("http"):
+                            if href and href.startswith("http") and "linkedin.com" not in href.lower():
                                 await page.goto(href, wait_until="domcontentloaded", timeout=20000)
                                 await page.wait_for_timeout(3000)
                             else:
@@ -287,11 +358,17 @@ async def analyze_form_flow(url: str):
                                 await page.wait_for_timeout(3000)
                             input_elements = await page.query_selector_all("input, textarea, select")
                             break
-                        except Exception:
-                            pass
+                    except Exception:
+                        pass
+
+            IGNORED_INPUT_NAMES = [
+                "keywords", "location", "search", "search_term", "q", "query", 
+                "site-search", "nav-search", "session_key", "session_password",
+                "global-search", "search-box", "search-input", "current-password"
+            ]
+
             for elem in input_elements:
                 try:
-                    # Filter visible input elements
                     if not await elem.is_visible():
                         continue
                     
@@ -300,6 +377,10 @@ async def analyze_form_flow(url: str):
                     id_attr = await elem.get_attribute("id") or ""
                     
                     if input_type in ["hidden", "submit", "button"]:
+                        continue
+
+                    # Skip global navigation and search bar inputs
+                    if name_attr.lower() in IGNORED_INPUT_NAMES or id_attr.lower() in IGNORED_INPUT_NAMES:
                         continue
 
                     # Attempt to resolve Label
@@ -312,7 +393,7 @@ async def analyze_form_flow(url: str):
                         label_text = name_attr or id_attr
                     
                     label_clean = label_text.strip().lower()
-                    if not label_clean:
+                    if not label_clean or label_clean in ["search", "keywords", "location"]:
                         continue
 
                     field_item = {
@@ -342,7 +423,6 @@ async def analyze_form_flow(url: str):
                         field_item["field_type"] = "file"
 
                     # Field Matching Confidence Rules
-                    # 1. Check user profile exact matches
                     if "name" in label_clean and "first" not in label_clean and "last" not in label_clean:
                         field_item["ai_value"] = profile.get("full_name", "")
                         field_item["confidence"] = 0.98
@@ -409,13 +489,10 @@ async def analyze_form_flow(url: str):
                         field_item["confidence"] = 0.95
                         field_item["source"] = "user_profile"
                     elif "cover" in label_clean or "motivation" in label_clean or "letter" in label_clean:
-                        # Gemini AI Cover Letter Personalization
                         field_item["ai_value"] = get_gemini_cover_letter(body_text, job_title)
                         field_item["confidence"] = 0.88
                         field_item["source"] = "ai_generated"
                     else:
-                        # Check learned answers
-                        # MD5 hash of label text for hash keying
                         import hashlib
                         q_hash = hashlib.md5(field_item["label"].encode("utf-8")).hexdigest()
                         field_item["question_hash"] = q_hash
@@ -424,7 +501,6 @@ async def analyze_form_flow(url: str):
                             field_item["confidence"] = 0.92
                             field_item["source"] = "learned_answer"
                         else:
-                            # Default AI Guess or Unknown
                             field_item["confidence"] = 0.0
                             field_item["source"] = "unknown"
 
@@ -493,15 +569,83 @@ async def submit_form_flow(url: str, fields_json: str):
     from playwright.async_api import async_playwright
     
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"]
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
+        await context.add_init_script(STEALTH_SCRIPT)
+
+        # Inject LinkedIn Cookie if visiting LinkedIn
+        li_cookie = (profile.get("linkedin_cookie") or os.environ.get("LINKEDIN_COOKIE") or "").strip()
+        if "linkedin.com" in url.lower() and li_cookie:
+            try:
+                clean_cookie = li_cookie.replace("li_at=", "").strip()
+                await context.add_cookies([{
+                    "name": "li_at",
+                    "value": clean_cookie,
+                    "domain": ".linkedin.com",
+                    "path": "/",
+                    "httpOnly": True,
+                    "secure": True
+                }])
+            except Exception:
+                pass
+
         page = await context.new_page()
         
         try:
-            await page.goto(url, wait_until="domcontentloaded")
+            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
             await page.wait_for_timeout(3000)
+
+            # Dismiss LinkedIn sign-in prompt modal if present
+            for dismiss_sel in [
+                "button[aria-label='Dismiss']",
+                ".contextual-sign-in-modal__modal-dismiss-btn",
+                "button.modal__dismiss",
+                "[data-modal-dismiss-btn]",
+                ".artdeco-modal__dismiss"
+            ]:
+                try:
+                    dismiss_btn = await page.query_selector(dismiss_sel)
+                    if dismiss_btn and await dismiss_btn.is_visible():
+                        await dismiss_btn.click()
+                        await page.wait_for_timeout(1000)
+                        break
+                except Exception:
+                    pass
+
+            # LinkedIn External ATS Unmasking
+            if "linkedin.com" in page.url.lower():
+                for apply_sel in [
+                    "a[data-tracking-control-name*='apply']",
+                    "a.apply-button",
+                    "a:has-text('Apply on company website')",
+                    "a:has-text('Apply on employer website')",
+                    "a:has-text('Apply')",
+                    "a[href*='lever.co']",
+                    "a[href*='greenhouse.io']",
+                    "a[href*='ashbyhq.com']",
+                    "a[href*='workable.com']"
+                ]:
+                    try:
+                        apply_cta = await page.query_selector(apply_sel)
+                        if apply_cta and await apply_cta.is_visible():
+                            href = await apply_cta.get_attribute("href")
+                            if href and href.startswith("http") and "linkedin.com" not in href.lower():
+                                await page.goto(href, wait_until="domcontentloaded", timeout=20000)
+                                await page.wait_for_timeout(3000)
+                                break
+                            else:
+                                await apply_cta.click()
+                                await page.wait_for_timeout(3000)
+                                break
+                    except Exception:
+                        pass
             
-            # Group fields by page_index (multi-page handling)
+            # Group fields by page_index
             pages_grouped = {}
             for f in confirmed_fields:
                 p_idx = f.get("page_index", 0)
@@ -510,7 +654,6 @@ async def submit_form_flow(url: str, fields_json: str):
                 pages_grouped[p_idx].append(f)
             
             for p_idx in sorted(pages_grouped.keys()):
-                # Fill fields on the current page
                 for field in pages_grouped[p_idx]:
                     sel = field["selector"]
                     val = field["value"]
@@ -518,19 +661,23 @@ async def submit_form_flow(url: str, fields_json: str):
 
                     try:
                         elem = await page.query_selector(sel)
-                        if not elem:
+                        if not elem or not await elem.is_visible():
                             continue
 
                         if f_type == "file":
-                            # Resolve CV path from workspace
                             workspace = os.environ.get("GITHUB_WORKSPACE", BASE_DIR)
                             cv_path = os.path.join(workspace, "data", "cvs", val)
+                            if not os.path.exists(cv_path):
+                                cv_dir = os.path.join(workspace, "data", "cvs")
+                                if os.path.exists(cv_dir):
+                                    cv_files = [f for f in os.listdir(cv_dir) if f.endswith(('.pdf', '.docx', '.doc'))]
+                                    if cv_files:
+                                        cv_path = os.path.join(cv_dir, cv_files[0])
                             if os.path.exists(cv_path):
                                 await page.set_input_files(sel, cv_path)
                         elif f_type == "select":
                             await page.select_option(sel, val)
                         elif f_type == "radio":
-                            # Radio matches value selector or clicks element
                             await page.click(sel)
                         elif f_type == "checkbox":
                             if val in [True, "true", "yes"]:
@@ -538,33 +685,79 @@ async def submit_form_flow(url: str, fields_json: str):
                             else:
                                 await page.uncheck(sel)
                         else:
-                            await page.fill(sel, val)
+                            await page.fill(sel, str(val))
                             
-                        # Conditional fields trigger wait
                         if field.get("triggers_conditional_fields", False):
                             await page.wait_for_load_state("networkidle")
                             await page.wait_for_timeout(1000)
                     except Exception as fill_err:
-                        print(f"Error filling field {field['label']}: {fill_err}")
+                        print(f"Error filling field {field.get('label')}: {fill_err}")
 
-                # If there are more pages, click next button
+                # Next button handler for multi-step forms
                 if p_idx < max(pages_grouped.keys()):
-                    # Simple next button click handler
                     for btn_sel in ["button:has-text('Next')", "button:has-text('Continue')", ".next-step-button"]:
-                        btn = await page.query_selector(btn_sel)
-                        if btn:
-                            await btn.click()
-                            await page.wait_for_load_state("networkidle")
-                            await page.wait_for_timeout(2000)
-                            break
+                        try:
+                            btn = await page.query_selector(btn_sel)
+                            if btn and await btn.is_visible():
+                                await btn.click()
+                                await page.wait_for_load_state("networkidle")
+                                await page.wait_for_timeout(2000)
+                                break
+                        except Exception:
+                            pass
 
-            # Capture Screenshot
+            # Click the Final Submit CTA Button
+            for sub_sel in [
+                "button[type='submit']",
+                "input[type='submit']",
+                "button[aria-label*='Submit application']",
+                "button:has-text('Submit application')",
+                "button:has-text('Submit Application')",
+                "button:has-text('Submit')",
+                "button:has-text('Send application')",
+                "button:has-text('Apply Now')",
+                "#submit-button",
+                "[data-qa='submit-button']"
+            ]:
+                try:
+                    sub_btn = await page.query_selector(sub_sel)
+                    if sub_btn and await sub_btn.is_visible():
+                        await sub_btn.click()
+                        await page.wait_for_load_state("networkidle")
+                        await page.wait_for_timeout(4000)
+                        break
+                except Exception:
+                    pass
+
+            # Capture Confirmation Screenshot
             os.makedirs(os.path.join(BASE_DIR, "data", "screenshots"), exist_ok=True)
             timestamp = int(time.time())
             screenshot_path = os.path.join(BASE_DIR, "data", "screenshots", f"confirm_{timestamp}.png")
             await page.screenshot(path=screenshot_path)
 
-            # Log success to application_log.json
+            # Verification Gate: Detect confirmation signals
+            page_text = (await page.inner_text("body")).lower()
+            page_url_final = page.url.lower()
+            CONFIRMATION_SIGNALS = [
+                "thank you for applying",
+                "application submitted",
+                "application received",
+                "your application has been received",
+                "we have received your application",
+                "application was sent",
+                "successfully submitted",
+                "thanks for applying",
+                "vielen dank für deine bewerbung",
+                "merci pour votre candidature"
+            ]
+            CONFIRMATION_URLS = ["/confirm", "/thanks", "/thank-you", "/applied", "/success", "/confirmation", "/complete"]
+
+            is_confirmed = any(sig in page_text for sig in CONFIRMATION_SIGNALS) or any(u in page_url_final for u in CONFIRMATION_URLS)
+            
+            raw_title = await page.title()
+            job_title_str = raw_title.strip() if raw_title else "Job Application"
+
+            # Log to application_log.json
             log_data = {"applications": []}
             if os.path.exists(APPLICATION_LOG_PATH):
                 try:
@@ -572,9 +765,6 @@ async def submit_form_flow(url: str, fields_json: str):
                         log_data = json.load(f)
                 except Exception:
                     pass
-            
-            raw_title = await page.title()
-            job_title_str = raw_title.strip() if raw_title else "Job Application"
 
             log_data["applications"].append({
                 "id": f"run-{timestamp}",
@@ -582,13 +772,13 @@ async def submit_form_flow(url: str, fields_json: str):
                 "job_title": job_title_str,
                 "company": "Company",
                 "ats_platform": detect_ats_platform_by_url(url),
-                "status": "applied",
+                "status": "applied" if is_confirmed else "requires_manual_apply",
                 "applied_at": datetime.utcnow().isoformat() + "Z",
                 "duration_seconds": 120,
                 "screenshot_artifact_url": f"screenshots/confirm_{timestamp}.png",
                 "artifact_expires_at": (datetime.utcnow() + timedelta(days=90)).isoformat() + "Z",
                 "confirmed_fields": confirmed_fields,
-                "error_message": None
+                "error_message": None if is_confirmed else "Application submission was not confirmed by the platform. Please verify or apply manually."
             })
 
             dir_name = os.path.dirname(APPLICATION_LOG_PATH)
@@ -605,7 +795,10 @@ async def submit_form_flow(url: str, fields_json: str):
             chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
             if bot_token and chat_id:
                 try:
-                    success_msg = f"✅ <b>SparkJobs Auto-Apply:</b> Application submitted successfully!\n\n📄 View history and screenshot confirmation in the dashboard."
+                    if is_confirmed:
+                        success_msg = f"✅ <b>SparkJobs Auto-Apply:</b> Application submitted successfully for <b>{escape_html(job_title_str)}</b>!\n\n📄 View screenshot in your dashboard."
+                    else:
+                        success_msg = f"⚠️ <b>SparkJobs Auto-Apply:</b> Application attempt for <b>{escape_html(job_title_str)}</b> requires manual completion.\n\n📄 View details in your dashboard."
                     url_tele = f"https://api.telegram.org/bot{bot_token}/sendMessage"
                     requests.post(url_tele, json={"chat_id": chat_id, "text": success_msg, "parse_mode": "HTML"}, timeout=10)
                 except Exception as t_err:
@@ -621,7 +814,6 @@ async def submit_form_flow(url: str, fields_json: str):
                 except Exception:
                     pass
         finally:
-            # Delete pending submission path
             if os.path.exists(PENDING_SUBMISSION_PATH):
                 try:
                     os.remove(PENDING_SUBMISSION_PATH)

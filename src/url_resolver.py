@@ -67,22 +67,32 @@ def normalize_indeed_url(url: str, location: str = "") -> str:
         domain = f"{subdomain_match.group(1)}.indeed.com"
     else:
         loc_lower = str(location or "").lower()
-        if "canada" in loc_lower or "ca" in loc_lower:
-            domain = "ca.indeed.com"
-        elif "saudi" in loc_lower or "ksa" in loc_lower:
-            domain = "sa.indeed.com"
-        elif "uae" in loc_lower or "emirates" in loc_lower or "dubai" in loc_lower:
-            domain = "ae.indeed.com"
-        elif "egypt" in loc_lower or "cairo" in loc_lower:
+        if re.search(r'\b(egypt|cairo|eg|alexandria|giza|القاهرة|مصر)\b', loc_lower):
             domain = "eg.indeed.com"
-        elif "uk" in loc_lower or "kingdom" in loc_lower or "london" in loc_lower:
+        elif re.search(r'\b(saudi|ksa|riyadh|jeddah|sa|السعودية|الرياض|جدة)\b', loc_lower):
+            domain = "sa.indeed.com"
+        elif re.search(r'\b(uae|emirates|dubai|abu dhabi|ae|الإمارات|دبي|أبوظبي)\b', loc_lower):
+            domain = "ae.indeed.com"
+        elif re.search(r'\b(qatar|doha|qa|قطر|الدوحة)\b', loc_lower):
+            domain = "qa.indeed.com"
+        elif re.search(r'\b(kuwait|kw|الكويت)\b', loc_lower):
+            domain = "kw.indeed.com"
+        elif re.search(r'\b(oman|muscat|om|عمان|مسقط)\b', loc_lower):
+            domain = "om.indeed.com"
+        elif re.search(r'\b(bahrain|bh|البحرين)\b', loc_lower):
+            domain = "bh.indeed.com"
+        elif re.search(r'\b(canada|ca)\b', loc_lower):
+            domain = "ca.indeed.com"
+        elif re.search(r'\b(uk|united kingdom|london|england|great britain|gb)\b', loc_lower):
             domain = "uk.indeed.com"
-        elif "germany" in loc_lower or "berlin" in loc_lower or "de" in loc_lower:
+        elif re.search(r'\b(germany|berlin|munich|de|deutschland)\b', loc_lower):
             domain = "de.indeed.com"
-        elif "france" in loc_lower or "paris" in loc_lower:
+        elif re.search(r'\b(france|paris|fr)\b', loc_lower):
             domain = "fr.indeed.com"
-        elif "australia" in loc_lower:
+        elif re.search(r'\b(australia|sydney|melbourne|au)\b', loc_lower):
             domain = "au.indeed.com"
+        elif re.search(r'\b(netherlands|amsterdam|nl)\b', loc_lower):
+            domain = "nl.indeed.com"
         else:
             domain = "www.indeed.com"
 

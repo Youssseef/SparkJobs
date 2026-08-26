@@ -86,9 +86,32 @@ def get_scraperapi_proxy(api_key: str) -> str:
 def get_indeed_subdomain(location: str) -> str:
     """Resolves native regional Indeed subdomain for given location."""
     loc_lower = str(location or "").lower()
-    for k, v in INDEED_DOMAINS.items():
-        if k in loc_lower:
-            return v
+    if re.search(r'\b(egypt|cairo|eg|alexandria|giza|القاهرة|مصر)\b', loc_lower):
+        return "eg.indeed.com"
+    elif re.search(r'\b(saudi|ksa|riyadh|jeddah|sa|السعودية|الرياض|جدة)\b', loc_lower):
+        return "sa.indeed.com"
+    elif re.search(r'\b(uae|emirates|dubai|abu dhabi|ae|الإمارات|دبي|أبوظبي)\b', loc_lower):
+        return "ae.indeed.com"
+    elif re.search(r'\b(qatar|doha|qa|قطر|الدوحة)\b', loc_lower):
+        return "qa.indeed.com"
+    elif re.search(r'\b(kuwait|kw|الكويت)\b', loc_lower):
+        return "kw.indeed.com"
+    elif re.search(r'\b(oman|muscat|om|عمان|مسقط)\b', loc_lower):
+        return "om.indeed.com"
+    elif re.search(r'\b(bahrain|bh|البحرين)\b', loc_lower):
+        return "bh.indeed.com"
+    elif re.search(r'\b(canada|ca)\b', loc_lower):
+        return "ca.indeed.com"
+    elif re.search(r'\b(uk|united kingdom|london|england|great britain|gb)\b', loc_lower):
+        return "uk.indeed.com"
+    elif re.search(r'\b(germany|berlin|munich|de|deutschland)\b', loc_lower):
+        return "de.indeed.com"
+    elif re.search(r'\b(france|paris|fr)\b', loc_lower):
+        return "fr.indeed.com"
+    elif re.search(r'\b(australia|sydney|melbourne|au)\b', loc_lower):
+        return "au.indeed.com"
+    elif re.search(r'\b(netherlands|amsterdam|nl)\b', loc_lower):
+        return "nl.indeed.com"
     return "indeed.com"
 
 def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 2) -> list:
@@ -125,18 +148,20 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 job_id = safe_str(row.get("id", ""))
                 url_direct = safe_str(row.get("job_url_direct", ""))
                 url_indirect = safe_str(row.get("job_url", ""))
+                job_loc = safe_str(row.get("location", "")) or location
 
                 raw_url = ""
                 if site == "indeed":
-                    if url_direct and is_ats_url(url_direct):
-                        raw_url = url_direct
+                    # Prefer direct employer career links over Indeed redirect links
+                    if url_direct and url_direct.strip().startswith("http"):
+                        raw_url = url_direct.strip()
                     else:
                         raw_url = url_indirect if (url_indirect and url_indirect.strip()) else url_direct
                     if raw_url and "indeed.com" in raw_url:
                         raw_url = re.sub(r'(?<=jk=)(indeed-|in-)(?=[a-f0-9])', '', raw_url)
                     if not raw_url or not raw_url.strip():
                         clean_id = re.sub(r'^(indeed-|in-)(?=[a-f0-9])', '', job_id)
-                        dom = get_indeed_subdomain(location)
+                        dom = get_indeed_subdomain(job_loc)
                         raw_url = f"https://{dom}/viewjob?jk={clean_id}"
                 else:
                     raw_url = url_direct if (url_direct and url_direct.strip() and url_direct.strip().startswith("http")) else url_indirect
@@ -148,8 +173,8 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 if not is_url_reliable(raw_url, site):
                     continue
 
-                # Pre-flight canonical URL resolution and liveness check
-                canonical_url, is_live, reason = resolve_canonical_url(raw_url, location=location)
+                # Pre-flight canonical URL resolution with actual job location
+                canonical_url, is_live, reason = resolve_canonical_url(raw_url, location=job_loc)
                 if not is_live:
                     print(f"Discarding dead or closed job ({reason}): {raw_url}")
                     continue

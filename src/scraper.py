@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from jobspy import scrape_jobs
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from url_resolver import resolve_canonical_url, is_ats_url
 
 INDEED_DOMAINS = {
@@ -343,10 +344,48 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
         print(f"Error scraping We Work Remotely: {e}")
     return jobs_list
 
+def _scrape_single_ats_dork(platform_name: str, dork: str, search_term: str, location: str, proxy_url: str, results_wanted: int, hours_old: int) -> list:
+    """Scrapes a single ATS dork domain concurrently."""
+    jobs = []
+    try:
+        dork_query = f'{dork} "{search_term}"'
+        print(f"Scraping Direct ATS ({platform_name.upper()} via {dork_query})...")
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        df = scrape_jobs(
+            site_name=["google"],
+            search_term=dork_query,
+            location=location,
+            results_wanted=results_wanted,
+            hours_old=hours_old,
+            proxies=proxies
+        )
+        if df is not None and not df.empty:
+            for _, row in df.iterrows():
+                raw_url = safe_str(row.get("job_url_direct", "")) or safe_str(row.get("job_url", ""))
+                if not raw_url or not is_url_reliable(raw_url, platform_name):
+                    continue
+                canonical_url, is_live, reason = resolve_canonical_url(raw_url, location=location)
+                if not is_live:
+                    continue
+                job_id = safe_str(row.get("id", "")) or f"{platform_name}-{hashlib.md5(canonical_url.encode()).hexdigest()[:10]}"
+                jobs.append({
+                    "id": job_id,
+                    "title": safe_str(row.get("title", "")),
+                    "company": safe_str(row.get("company", "")),
+                    "location": safe_str(row.get("location", "")) or location,
+                    "url": canonical_url,
+                    "description": strip_html(safe_str(row.get("description", ""))),
+                    "source": f"Direct ATS ({platform_name.title()})",
+                    "ats_platform": platform_name,
+                    "date": datetime.utcnow().isoformat() + "Z"
+                })
+    except Exception as e:
+        print(f"Error scraping ATS dork for {platform_name}: {e}")
+    return jobs
+
 def scrape_direct_ats_dorks(search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24) -> list:
     """
-    Directly targets open ATS domains (Lever, Greenhouse, Ashby, Workable) via Google Jobs
-    to guarantee massive pools of 100% direct, open auto-applyable forms.
+    Directly targets open ATS domains (Lever, Greenhouse, Ashby, Workable) via Google Jobs concurrently.
     """
     ats_jobs = []
     ats_domains = [
@@ -356,41 +395,18 @@ def scrape_direct_ats_dorks(search_term: str, location: str, proxy_url: str = ""
         ("workable", "site:apply.workable.com")
     ]
     
-    for platform_name, dork in ats_domains:
-        try:
-            dork_query = f'{dork} "{search_term}"'
-            print(f"Scraping Direct ATS ({platform_name.upper()} via {dork_query})...")
-            proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-            df = scrape_jobs(
-                site_name=["google"],
-                search_term=dork_query,
-                location=location,
-                results_wanted=results_wanted,
-                hours_old=hours_old,
-                proxies=proxies
-            )
-            if df is not None and not df.empty:
-                for _, row in df.iterrows():
-                    raw_url = safe_str(row.get("job_url_direct", "")) or safe_str(row.get("job_url", ""))
-                    if not raw_url or not is_url_reliable(raw_url, platform_name):
-                        continue
-                    canonical_url, is_live, reason = resolve_canonical_url(raw_url, location=location)
-                    if not is_live:
-                        continue
-                    job_id = safe_str(row.get("id", "")) or f"{platform_name}-{hashlib.md5(canonical_url.encode()).hexdigest()[:10]}"
-                    ats_jobs.append({
-                        "id": job_id,
-                        "title": safe_str(row.get("title", "")),
-                        "company": safe_str(row.get("company", "")),
-                        "location": safe_str(row.get("location", "")) or location,
-                        "url": canonical_url,
-                        "description": strip_html(safe_str(row.get("description", ""))),
-                        "source": f"Direct ATS ({platform_name.title()})",
-                        "ats_platform": platform_name,
-                        "date": datetime.utcnow().isoformat() + "Z"
-                    })
-        except Exception as e:
-            print(f"Error scraping ATS dork for {platform_name}: {e}")
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(_scrape_single_ats_dork, platform_name, dork, search_term, location, proxy_url, results_wanted, hours_old)
+            for platform_name, dork in ats_domains
+        ]
+        for f in as_completed(futures):
+            try:
+                res = f.result()
+                if res:
+                    ats_jobs.extend(res)
+            except Exception as e:
+                print(f"Error in ATS thread: {e}")
             
     print(f"Direct ATS Google Dorks found {len(ats_jobs)} direct live jobs.")
     return ats_jobs
@@ -430,42 +446,38 @@ def scrape_himalayas(search_term: str, proxy_url: str = "") -> list:
     return jobs_list
 
 def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", hours_old: int = 24) -> list:
-    """Aggregates jobs across universal platforms, direct ATS dorks, and remote hubs."""
+    """Aggregates jobs across universal platforms, direct ATS dorks, and remote hubs in parallel."""
     all_jobs = []
     seen_urls = set()
     proxy_url = get_scraperapi_proxy(scraperapi_key)
-    
-    # 1. Direct ATS Google Dorks (Guaranteed open ATS links: Lever, Greenhouse, Ashby, Workable)
-    direct_ats = scrape_direct_ats_dorks(search_term, location, proxy_url, results_wanted=15, hours_old=hours_old)
-    for j in direct_ats:
-        if j["url"] not in seen_urls:
-            seen_urls.add(j["url"])
-            all_jobs.append(j)
-
-    # 2. Universal Enterprise Job Boards (LinkedIn, Indeed, Google, Glassdoor, ZipRecruiter)
-    universal_sites = ["linkedin", "indeed", "google", "glassdoor", "zip_recruiter"]
-    universal_jobs = scrape_jobspy(
-        site_name=universal_sites,
-        search_term=search_term,
-        location=location,
-        proxy_url=proxy_url,
-        hours_old=hours_old
-    )
-    for j in universal_jobs:
-        if j["url"] not in seen_urls:
-            seen_urls.add(j["url"])
-            all_jobs.append(j)
-    
-    # 3. Direct Remote Job APIs (Himalayas, RemoteOK, Remotive, WWR)
     is_remote_search = "remote" in location.lower() or "worldwide" in location.lower()
-    if is_remote_search:
-        for r_job in (scrape_himalayas(search_term, proxy_url) + 
-                      scrape_remoteok(search_term, proxy_url) + 
-                      scrape_remotive(search_term, proxy_url) + 
-                      scrape_weworkremotely(search_term, proxy_url)):
-            if r_job["url"] not in seen_urls:
-                seen_urls.add(r_job["url"])
-                all_jobs.append(r_job)
+    
+    tasks = []
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        # 1. Parallel Task: Direct ATS Google Dorks
+        tasks.append(executor.submit(scrape_direct_ats_dorks, search_term, location, proxy_url, 15, hours_old))
+        
+        # 2. Parallel Task: Universal Enterprise Job Boards (JobSpy)
+        universal_sites = ["linkedin", "indeed", "google", "glassdoor", "zip_recruiter"]
+        tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, hours_old))
+        
+        # 3. Parallel Tasks: Direct Remote Job APIs
+        if is_remote_search:
+            tasks.append(executor.submit(scrape_himalayas, search_term, proxy_url))
+            tasks.append(executor.submit(scrape_remoteok, search_term, proxy_url))
+            tasks.append(executor.submit(scrape_remotive, search_term, proxy_url))
+            tasks.append(executor.submit(scrape_weworkremotely, search_term, proxy_url))
+            
+        for future in as_completed(tasks):
+            try:
+                results = future.result()
+                if results:
+                    for j in results:
+                        if j and isinstance(j, dict) and j.get("url") and j["url"] not in seen_urls:
+                            seen_urls.add(j["url"])
+                            all_jobs.append(j)
+            except Exception as e:
+                print(f"Scraper subtask error: {e}")
         
     return all_jobs
 

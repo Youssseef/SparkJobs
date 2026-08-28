@@ -2,7 +2,7 @@ name: SparkJobs Scanner
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # Runs every 30 mins (~1,440 runs/mo, well within GitHub 2,000 free minutes limit)
+    - cron: '14,44 * * * *' # Off-peak minutes (minute 14 & 44) to avoid GitHub global :00/:30 congestion
   workflow_dispatch: # Allows manual instant trigger
 
 jobs:

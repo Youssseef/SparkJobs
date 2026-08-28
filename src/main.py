@@ -216,7 +216,7 @@ def run_scanner():
             location = "Remote" if remote_only else country_name
             print(f"Scanning for '{title}' in '{location}'...")
             
-            jobs = run_all_scrapes(title, location, scraperapi_key, hours_old=2)
+            jobs = run_all_scrapes(title, location, scraperapi_key, hours_old=24)
             
             # Step 1: Pre-filter candidate jobs that are un-seen and match keyword rules
             candidate_jobs = []

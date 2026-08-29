@@ -1,9 +1,7 @@
 name: SparkJobs Scanner
 
 on:
-  schedule:
-    - cron: '14,44 * * * *' # Off-peak minutes (minute 14 & 44) to avoid GitHub global :00/:30 congestion
-  workflow_dispatch: # Allows manual instant trigger
+  workflow_dispatch: # Triggered on-demand or by backend cron dispatcher
 
 jobs:
   scan:

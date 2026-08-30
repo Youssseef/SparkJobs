@@ -20,7 +20,8 @@ from ai_matcher import analyze_job_match
 from deduplicator import load_seen_jobs, save_seen_jobs, is_job_seen, mark_job_as_seen, cleanup_old_jobs
 from telegram_sender import send_telegram_alert, send_telegram_message, send_weekly_summary, SPARKGEN_FOOTER
 from config_loader import (
-    BASE_DIR, CONFIG_PATH, SEEN_JOBS_PATH, STATUS_TRACKER_PATH, CVS_DIR, COVER_LETTER_PATH,
+    get_base_dir, get_config_path, get_seen_jobs_path, get_status_tracker_path,
+    get_cvs_dir, get_cover_letter_path, get_jobs_history_path,
     load_config, load_status_tracker, save_status_tracker
 )
 from title_matcher import is_title_relevant
@@ -62,7 +63,7 @@ def run_scanner():
         print("FATAL: Config is empty or corrupted. Aborting scan cycle.")
         return
 
-    sentinel_path = os.path.join(BASE_DIR, "data", ".config_corrupted")
+    sentinel_path = os.path.join(get_base_dir(), "data", ".config_corrupted")
     if os.path.exists(sentinel_path):
         try:
             bot_tok = config.get("telegram_bot_token", "") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -95,7 +96,7 @@ def run_scanner():
     # 1. Smart Dual-Pacing & Monthly Usage Management
     current_month_str = datetime.utcnow().strftime("%Y-%m")
     if tracker.get("billing_cycle_month") != current_month_str:
-        print(f"🔄 New billing cycle detected ({current_month_str}). Resetting monthly minutes counter.")
+        print(f"[Cycle] New billing cycle detected ({current_month_str}). Resetting monthly minutes counter.")
         tracker["billing_cycle_month"] = current_month_str
         tracker["monthly_minutes_used"] = 0.0
         tracker["monthly_runs_count"] = 0
@@ -116,12 +117,13 @@ def run_scanner():
         except Exception as pe:
             print(f"Pacing check error: {pe}")
 
-    seen_jobs = load_seen_jobs(SEEN_JOBS_PATH)
+    seen_jobs = load_seen_jobs(get_seen_jobs_path())
 
     cover_letter = ""
-    if os.path.exists(COVER_LETTER_PATH):
+    cover_letter_path = get_cover_letter_path()
+    if os.path.exists(cover_letter_path):
         try:
-            with open(COVER_LETTER_PATH, "r", encoding="utf-8") as f:
+            with open(cover_letter_path, "r", encoding="utf-8") as f:
                 cover_letter = f.read().strip()
         except Exception as e:
             print(f"Error reading cover letter: {e}")
@@ -326,7 +328,7 @@ def run_scanner():
 
     # Single persistence write to seen_jobs database at the end of scan cycle
     seen_jobs = cleanup_old_jobs(seen_jobs)
-    save_seen_jobs(SEEN_JOBS_PATH, seen_jobs)
+    save_seen_jobs(get_seen_jobs_path(), seen_jobs)
 
     # Report Aggregated Telemetry Ping
     try:
@@ -371,6 +373,6 @@ def run_scanner():
 
 
 if __name__ == "__main__":
-    os.makedirs(CVS_DIR, exist_ok=True)
-    os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+    os.makedirs(get_cvs_dir(), exist_ok=True)
+    os.makedirs(os.path.join(get_base_dir(), "data"), exist_ok=True)
     run_scanner()

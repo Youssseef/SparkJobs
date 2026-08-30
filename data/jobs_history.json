@@ -1,3 +1,15 @@
 {
-  "jobs": []
+  "jobs": [
+    {
+      "id": "jobspy-scan-test-1",
+      "title": "Senior React Developer",
+      "company": "Acme Corp",
+      "location": "Remote",
+      "url": "https://boards.greenhouse.io/acme/jobs/999",
+      "source": "Google Jobs",
+      "match_score": 100,
+      "scraped_at": "2026-08-30T13:37:37.761139Z",
+      "ats_platform": "greenhouse"
+    }
+  ]
 }

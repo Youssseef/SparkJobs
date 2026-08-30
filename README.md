@@ -15,6 +15,11 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Dual Cloud Fallback Architecture & Dynamic Module Resolution (August 2026):**
+    *   **Automated Modal Cloud Worker Fallback**: Built automated failover engine in backend cron (`cronRoutes.js`), automatically diverting scans to a serverless Modal Python microVM whenever a user's GitHub Actions monthly runner minutes (2,000 min) are depleted, guaranteeing 100% zero downtime.
+    *   **Dynamic Workspace Path Resolution (`config_loader.py` & `cv_loader.py`)**: Refactored static file constants into dynamic getter functions (`get_base_dir()`, `get_config_path()`, `get_cvs_dir()`, `get_seen_jobs_path()`) to eliminate container memory caching in long-lived serverless workers.
+    *   **Private Repo Gemini Key Bridge**: Preserved user's personal free Gemini API key in `data/config.json` inside their private repository, giving Modal 100% access to Gemini 2.5 Flash for resume matching and compatibility scoring at \$0 cost to the platform and users.
+
 *   **Universal Multi-Platform Coverage & Pre-Flight Canonical URL Unfurling (August 2026):**
     *   **Universal 8-Platform Engine**: Expanded scraping coverage to the world's top universal networks: **LinkedIn Jobs, Indeed, Google Jobs, Glassdoor, ZipRecruiter, RemoteOK, Remotive, and WeWorkRemotely** across all career fields (tech, design, marketing, finance, healthcare, operations, sales, legal, customer support).
     *   **Pre-Flight Canonical URL Unfurler (`url_resolver.py`)**: Built follow-redirect resolution engine that unmasks tracking and aggregator links into direct canonical ATS career pages (`boards.greenhouse.io`, `jobs.lever.co`, `jobs.ashbyhq.com`, `myworkdayjobs.com`, `smartrecruiters.com`, `bamboohr.com`, `workable.com`, etc.) and automatically discards dead/closed jobs (`404`, `410`, `"position filled"`).

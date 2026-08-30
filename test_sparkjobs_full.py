@@ -491,6 +491,24 @@ class TestSparkJobsSuite(unittest.TestCase):
         self.assertNotIn("old_tz_job", res)
         self.assertIn("fresh_tz_job", res)
 
+    def test_triple_shield_cross_platform_deduplication(self):
+        from deduplicator import is_job_seen, mark_job_as_seen
+        db = {}
+        # 1. First platform (LinkedIn) scrapes and marks as seen
+        mark_job_as_seen(db, "linkedin-101", "Product Designer", "Figma Inc.", url="https://www.linkedin.com/jobs/view/101?trk=cap")
+        
+        # Shield 1: Exact Job ID seen
+        self.assertTrue(is_job_seen(db, "linkedin-101"))
+        
+        # Shield 2: Cross-Platform Match (RemoteOK scrapes same role with different ID)
+        self.assertTrue(is_job_seen(db, "remoteok-999", title="Product Designer", company="Figma"))
+        
+        # Shield 3: Canonical URL Match (Different ID, same clean URL)
+        self.assertTrue(is_job_seen(db, "google-555", url="https://www.linkedin.com/jobs/view/101"))
+        
+        # Unseen different company
+        self.assertFalse(is_job_seen(db, "indeed-202", title="Product Designer", company="Stripe"))
+
     def test_title_matcher_symbol_tech_stack(self):
         from title_matcher import is_title_relevant, get_role_core
         self.assertEqual(get_role_core("C++ Developer"), "c++")

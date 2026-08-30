@@ -225,14 +225,17 @@ def run_scanner():
             for job in jobs:
                 try:
                     job_id = job["id"]
-                    if is_job_seen(seen_jobs, job_id):
+                    job_title = job.get("title", "")
+                    job_company = job.get("company", "")
+                    job_url = job.get("url", "")
+                    if is_job_seen(seen_jobs, job_id, title=job_title, company=job_company, url=job_url):
                         continue
                     
                     should_exclude = False
                     if exclude_keywords:
-                        job_title_lower = job.get("title", "").lower()
+                        job_title_lower = job_title.lower()
                         job_desc_lower = job.get("description", "").lower()
-                        job_company_lower = job.get("company", "").lower()
+                        job_company_lower = job_company.lower()
                         for kw in exclude_keywords:
                             kw_clean = kw.strip().lower()
                             if not kw_clean:
@@ -247,11 +250,11 @@ def run_scanner():
                                 break
                     
                     if should_exclude:
-                        mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
+                        mark_job_as_seen(seen_jobs, job_id, job_title, job_company, url=job_url)
                         continue
 
-                    if not is_title_relevant(job.get("title", ""), job_titles):
-                        mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
+                    if not is_title_relevant(job_title, job_titles):
+                        mark_job_as_seen(seen_jobs, job_id, job_title, job_company, url=job_url)
                         continue
 
                     candidate_jobs.append(job)
@@ -276,7 +279,7 @@ def run_scanner():
                             
                             if res["is_scam"]:
                                 print(f"Skipping High Risk/Scam job: {job['title']} at {job.get('company')}")
-                                mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
+                                mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"], url=job.get("url", ""))
                                 scam_jobs_skipped += 1
                                 continue
                                 
@@ -322,7 +325,7 @@ def run_scanner():
                                     tracker["alerts_sent_this_week"] = tracker.get("alerts_sent_this_week", 0) + 1
                                     time.sleep(random.uniform(0.5, 1.2))
                             
-                            mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"])
+                            mark_job_as_seen(seen_jobs, job_id, job["title"], job["company"], url=job.get("url", ""))
                         except Exception as eval_err:
                             print(f"Error in parallel AI eval: {eval_err}")
 

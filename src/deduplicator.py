@@ -46,37 +46,97 @@ def save_seen_jobs(file_path: str, data: dict):
             except OSError:
                 pass
 
-def is_job_seen(db: dict | str, job_id: str) -> bool:
-    """
-    Checks if a job_id has been seen before.
-    Supports either a pre-loaded dict (in-memory fast path) or a file path string.
-    """
-    if isinstance(db, dict):
-        return job_id in db
-    seen_jobs = load_seen_jobs(db)
-    return job_id in seen_jobs
+import hashlib
+import re
 
-def mark_job_as_seen(db: dict | str, job_id: str, title: str, company: str):
+def normalize_text_key(text: str) -> str:
+    """Normalizes title or company name to alphanumeric lowercase for fuzzy deduplication."""
+    if not text or not isinstance(text, str):
+        return ""
+    # Strip common suffixes like Inc, LLC, Ltd, GmbH, Corp
+    cleaned = re.sub(r'(?i)\b(inc|llc|ltd|gmbh|corp|corporation|co|company|technologies|tech)\b', '', text)
+    # Remove all non-alphanumeric chars
+    cleaned = re.sub(r'[^a-zA-Z0-9]', '', cleaned).lower()
+    return cleaned
+
+def get_job_signature(title: str, company: str) -> str:
+    """Generates a stable cross-platform signature hash for a job."""
+    norm_t = normalize_text_key(title)
+    norm_c = normalize_text_key(company)
+    if not norm_t and not norm_c:
+        return ""
+    return f"sig-{hashlib.md5(f'{norm_t}::{norm_c}'.encode()).hexdigest()[:12]}"
+
+def get_url_signature(url: str) -> str:
+    """Generates a stable hash for a normalized job URL."""
+    if not url or not isinstance(url, str):
+        return ""
+    # Strip tracking parameters (?utm_*, ?trk=*, &ref=*)
+    clean_url = url.split("?")[0].rstrip("/").lower()
+    return f"url-{hashlib.md5(clean_url.encode()).hexdigest()[:12]}"
+
+def is_job_seen(db: dict | str, job_id: str, title: str = "", company: str = "", url: str = "") -> bool:
     """
-    Saves a job_id with metadata and current timestamp to the seen jobs database.
-    Supports mutating an in-memory dict or disk persistence.
+    Triple-Shield Deduplication Check:
+    1. Exact job_id match (e.g. 'linkedin-12345')
+    2. Cross-platform title + company signature match (e.g. 'sig-a1b2c3d4e5f6')
+    3. Normalized URL signature match (e.g. 'url-9f8e7d6c5b4a')
+    """
+    seen_jobs = db if isinstance(db, dict) else load_seen_jobs(db)
+    if not seen_jobs:
+        return False
+
+    # Shield 1: Direct Job ID
+    if job_id and job_id in seen_jobs:
+        return True
+
+    # Shield 2: Cross-Platform Title + Company Signature
+    if title or company:
+        sig = get_job_signature(title, company)
+        if sig and sig in seen_jobs:
+            return True
+
+    # Shield 3: Clean Canonical URL Signature
+    if url:
+        url_sig = get_url_signature(url)
+        if url_sig and url_sig in seen_jobs:
+            return True
+
+    return False
+
+def mark_job_as_seen(db: dict | str, job_id: str, title: str, company: str, url: str = ""):
+    """
+    Saves a job_id with metadata and current timestamp to the seen jobs database,
+    along with cross-platform title+company and URL signatures.
     """
     iso_now = datetime.utcnow().isoformat() + "Z"
-    if isinstance(db, dict):
-        db[job_id] = {
-            "title": title,
-            "company": company,
-            "date": iso_now
-        }
-        return
-
-    seen_jobs = load_seen_jobs(db)
-    seen_jobs[job_id] = {
+    meta = {
         "title": title,
         "company": company,
         "date": iso_now
     }
-    save_seen_jobs(db, seen_jobs)
+    if url:
+        meta["url"] = url
+
+    target_dict = db if isinstance(db, dict) else load_seen_jobs(db)
+    
+    # 1. Primary job ID
+    if job_id:
+        target_dict[job_id] = meta
+
+    # 2. Cross-platform signature
+    sig = get_job_signature(title, company)
+    if sig:
+        target_dict[sig] = meta
+
+    # 3. Canonical URL signature
+    if url:
+        url_sig = get_url_signature(url)
+        if url_sig:
+            target_dict[url_sig] = meta
+
+    if not isinstance(db, dict):
+        save_seen_jobs(db, target_dict)
 
 def cleanup_old_jobs(db: dict | str, days_to_keep: int = 30) -> dict:
     """

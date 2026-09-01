@@ -9,6 +9,34 @@ PREFERRED_ATS_DOMAINS = [
     "applytojob.com", "taleo.net", "icims.com"
 ]
 
+ATS_PLATFORM_MAP = {
+    "greenhouse.io": "greenhouse",
+    "lever.co": "lever",
+    "smartrecruiters.com": "smartrecruiters",
+    "ashbyhq.com": "ashby",
+    "workdayjobs.com": "workday",
+    "myworkdayjobs.com": "workday",
+    "workday.com": "workday",
+    "workable.com": "workable",
+    "bamboohr.com": "bamboohr",
+    "breezy.hr": "breezy",
+    "recruitee.com": "recruitee",
+    "jobvite.com": "jobvite",
+    "applytojob.com": "jazzhr",
+    "taleo.net": "taleo",
+    "icims.com": "icims"
+}
+
+def detect_ats_platform(url: str) -> str:
+    """Detects ATS platform name from URL."""
+    if not url or not isinstance(url, str):
+        return "custom"
+    u = url.lower()
+    for domain, platform in ATS_PLATFORM_MAP.items():
+        if domain in u:
+            return platform
+    return "custom"
+
 CLOSED_JOB_SIGNALS = [
     "this position has been filled",
     "this position is no longer available",

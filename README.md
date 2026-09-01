@@ -15,6 +15,11 @@ It is designed to run 100% free on **GitHub Actions** as a cron schedule with no
 ---
 ## 🛠️ Recent Architectural Upgrades (Updates log)
 
+*   **Template Data Hygiene, Clean Slate Initialization & ATS Platform Map Isolation (September 2026):**
+    *   **Clean Slate Initialization**: Reset template tracking files (`data/status_tracker.json` to 0 stats, `data/seen_jobs.json` to `{}`) and modernized `data/config.json` schema to guarantee newly cloned user repositories start with 0 metrics and clean state.
+    *   **ATS Platform Map Isolation (`url_resolver.py`)**: Isolated ATS domain mappings directly inside `url_resolver.py`, eliminating cyclical import dependencies on `auto_apply.py` in headless containerized environments.
+    *   **Calendar Month Rollover for Quota Guards**: Implemented automatic month rollover in backend runner guards to prevent stale prior-month failures from triggering unnecessary Modal compute fallbacks.
+
 *   **Dual Cloud Fallback Architecture & Dynamic Module Resolution (August 2026):**
     *   **Automated Modal Cloud Worker Fallback**: Built automated failover engine in backend cron (`cronRoutes.js`), automatically diverting scans to a serverless Modal Python microVM whenever a user's GitHub Actions monthly runner minutes (2,000 min) are depleted, guaranteeing 100% zero downtime.
     *   **Dynamic Workspace Path Resolution (`config_loader.py` & `cv_loader.py`)**: Refactored static file constants into dynamic getter functions (`get_base_dir()`, `get_config_path()`, `get_cvs_dir()`, `get_seen_jobs_path()`) to eliminate container memory caching in long-lived serverless workers.

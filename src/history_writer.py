@@ -1,10 +1,7 @@
 import os
 from datetime import datetime
 from config_loader import load_jobs_history, save_jobs_history
-from auto_apply import detect_ats_platform_by_url
-
-def detect_ats_platform(url: str) -> str:
-    return detect_ats_platform_by_url(url)
+from url_resolver import detect_ats_platform
 
 def append_to_history(new_jobs: list):
     """

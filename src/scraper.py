@@ -115,7 +115,22 @@ def get_indeed_subdomain(location: str) -> str:
         return "nl.indeed.com"
     return "indeed.com"
 
-def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 2) -> list:
+GLASSDOOR_SUPPORTED_COUNTRIES = {
+    "usa", "united states", "us", "uk", "united kingdom", "canada", "australia", 
+    "germany", "france", "netherlands", "ireland", "new zealand", "india"
+}
+ZIP_RECRUITER_SUPPORTED_COUNTRIES = {
+    "usa", "united states", "us", "canada", "uk", "united kingdom"
+}
+COUNTRY_ALIASES = {
+    "ksa": "saudi arabia",
+    "uae": "united arab emirates",
+    "uk": "united kingdom",
+    "us": "usa",
+    "united states": "usa"
+}
+
+def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24) -> list:
     """
     Scrapes jobs across universal platforms using python-jobspy
     (LinkedIn, Indeed, Google Jobs, Glassdoor, ZipRecruiter).
@@ -126,21 +141,49 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
         country_indeed = "usa"
         for k, v in INDEED_DOMAINS.items():
             if k in loc_lower:
-                country_indeed = k.replace(" ", "_")
+                country_indeed = COUNTRY_ALIASES.get(k, k)
                 break
 
-        print(f"Scraping JobSpy ({site_name}) for '{search_term}' in '{location}' (last {hours_old}h)...")
-        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        # Dynamically sanitize site_name based on regional platform availability
+        valid_sites = []
+        for s in site_name:
+            if s == "glassdoor" and not any(gc in loc_lower for gc in GLASSDOOR_SUPPORTED_COUNTRIES):
+                continue
+            if s == "zip_recruiter" and not any(zc in loc_lower for zc in ZIP_RECRUITER_SUPPORTED_COUNTRIES):
+                continue
+            valid_sites.append(s)
+        if not valid_sites:
+            valid_sites = ["linkedin", "indeed", "google"]
 
-        df = scrape_jobs(
-            site_name=site_name,
-            search_term=search_term,
-            location=location,
-            results_wanted=results_wanted,
-            hours_old=hours_old,
-            country_indeed=country_indeed,
-            proxies=proxies
-        )
+        print(f"Scraping JobSpy ({valid_sites}) for '{search_term}' in '{location}' (last {hours_old}h)...")
+        jobspy_proxies = [proxy_url] if proxy_url else None
+
+        df = None
+        try:
+            df = scrape_jobs(
+                site_name=valid_sites,
+                search_term=search_term,
+                location=location,
+                results_wanted=results_wanted,
+                hours_old=hours_old,
+                country_indeed=country_indeed,
+                proxies=jobspy_proxies
+            )
+        except Exception as primary_err:
+            print(f"JobSpy scrape attempt failed ({primary_err}). Retrying with direct connection...")
+            try:
+                core_sites = [s for s in ["linkedin", "indeed", "google"] if s in valid_sites] or ["linkedin", "indeed", "google"]
+                df = scrape_jobs(
+                    site_name=core_sites,
+                    search_term=search_term,
+                    location=location,
+                    results_wanted=results_wanted,
+                    hours_old=hours_old,
+                    country_indeed=country_indeed,
+                    proxies=None
+                )
+            except Exception as retry_err:
+                print(f"JobSpy direct retry error: {retry_err}")
 
         if df is not None and not df.empty:
             for _, row in df.iterrows():
@@ -350,15 +393,30 @@ def _scrape_single_ats_dork(platform_name: str, dork: str, search_term: str, loc
     try:
         dork_query = f'{dork} "{search_term}"'
         print(f"Scraping Direct ATS ({platform_name.upper()} via {dork_query})...")
-        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        df = scrape_jobs(
-            site_name=["google"],
-            search_term=dork_query,
-            location=location,
-            results_wanted=results_wanted,
-            hours_old=hours_old,
-            proxies=proxies
-        )
+        jobspy_proxies = [proxy_url] if proxy_url else None
+        df = None
+        try:
+            df = scrape_jobs(
+                site_name=["google"],
+                search_term=dork_query,
+                location=location,
+                results_wanted=results_wanted,
+                hours_old=hours_old,
+                proxies=jobspy_proxies
+            )
+        except Exception as dork_err:
+            if jobspy_proxies:
+                try:
+                    df = scrape_jobs(
+                        site_name=["google"],
+                        search_term=dork_query,
+                        location=location,
+                        results_wanted=results_wanted,
+                        hours_old=hours_old,
+                        proxies=None
+                    )
+                except Exception:
+                    pass
         if df is not None and not df.empty:
             for _, row in df.iterrows():
                 raw_url = safe_str(row.get("job_url_direct", "")) or safe_str(row.get("job_url", ""))
@@ -459,7 +517,7 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", h
         
         # 2. Parallel Task: Universal Enterprise Job Boards (JobSpy)
         universal_sites = ["linkedin", "indeed", "google", "glassdoor", "zip_recruiter"]
-        tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, hours_old))
+        tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, 15, hours_old))
         
         # 3. Parallel Tasks: Direct Remote Job APIs
         if is_remote_search:

@@ -29,8 +29,8 @@ from update_checker import check_for_updates
 from history_writer import append_to_history
 
 
-def evaluate_single_job(job, cv_text, gemini_key, min_score, cover_letter, years_exp):
-    """Evaluates fraud detection and AI match score concurrently."""
+def evaluate_single_job(job, cv_text, gemini_key, min_score, cover_letter, years_exp, requires_visa=False, target_country=""):
+    """Evaluates fraud detection and AI match score concurrently, checking visa restriction if required."""
     fraud_result = analyze_job_for_fraud(job)
     if fraud_result.get("risk_level") == "High":
         return {"job": job, "is_scam": True, "ai_result": None, "fraud_result": fraud_result}
@@ -42,7 +42,9 @@ def evaluate_single_job(job, cv_text, gemini_key, min_score, cover_letter, years
         api_key=gemini_key,
         min_match_score=min_score,
         cover_letter=cover_letter,
-        years_exp=years_exp
+        years_exp=years_exp,
+        requires_visa=requires_visa,
+        target_country=target_country
     )
     if fraud_result.get("is_suspicious"):
         ai_result["risk_level"] = fraud_result["risk_level"]
@@ -211,14 +213,21 @@ def run_scanner():
         country_name = tc.get("country", "Worldwide")
         remote_only = tc.get("remote_only", False)
         min_score = tc.get("min_match_score", 65)
+        requires_visa = tc.get("requires_visa", False)
 
-        print(f"\n--- Scanning Location: {country_name} (Min Score: {min_score}%) ---")
+        print(f"\n--- Scanning Location: {country_name} (Min Score: {min_score}%, Visa Needed: {requires_visa}) ---")
 
         for title in job_titles:
-            location = "Remote" if remote_only else country_name
-            print(f"Scanning for '{title}' in '{location}'...")
+            if country_name.lower() in ["worldwide", "remote", "global"]:
+                location = "Remote"
+                is_remote_flag = True
+            else:
+                location = country_name
+                is_remote_flag = remote_only
+
+            print(f"Scanning for '{title}' in '{location}' (Remote Only: {is_remote_flag})...")
             
-            jobs = run_all_scrapes(title, location, scraperapi_key, hours_old=24)
+            jobs = run_all_scrapes(title, location, scraperapi_key, hours_old=24, is_remote=is_remote_flag)
             
             # Step 1: Pre-filter candidate jobs that are un-seen and match keyword rules
             candidate_jobs = []
@@ -267,7 +276,7 @@ def run_scanner():
             if candidate_jobs:
                 with ThreadPoolExecutor(max_workers=5) as executor:
                     eval_futures = [
-                        executor.submit(evaluate_single_job, j, cv_text, gemini_key, min_score, cover_letter, years_exp)
+                        executor.submit(evaluate_single_job, j, cv_text, gemini_key, min_score, cover_letter, years_exp, requires_visa, country_name)
                         for j in candidate_jobs
                     ]
                     

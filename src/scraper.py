@@ -130,7 +130,7 @@ COUNTRY_ALIASES = {
     "united states": "usa"
 }
 
-def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24) -> list:
+def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24, is_remote: bool = False) -> list:
     """
     Scrapes jobs across universal platforms using python-jobspy
     (LinkedIn, Indeed, Google Jobs, Glassdoor, ZipRecruiter).
@@ -155,7 +155,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
         if not valid_sites:
             valid_sites = ["linkedin", "indeed", "google"]
 
-        print(f"Scraping JobSpy ({valid_sites}) for '{search_term}' in '{location}' (last {hours_old}h)...")
+        print(f"Scraping JobSpy ({valid_sites}) for '{search_term}' in '{location}' (Remote: {is_remote}, last {hours_old}h)...")
         jobspy_proxies = [proxy_url] if proxy_url else None
 
         df = None
@@ -167,6 +167,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 results_wanted=results_wanted,
                 hours_old=hours_old,
                 country_indeed=country_indeed,
+                is_remote=is_remote,
                 proxies=jobspy_proxies
             )
         except Exception as primary_err:
@@ -180,6 +181,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                     results_wanted=results_wanted,
                     hours_old=hours_old,
                     country_indeed=country_indeed,
+                    is_remote=is_remote,
                     proxies=None
                 )
             except Exception as retry_err:
@@ -503,21 +505,22 @@ def scrape_himalayas(search_term: str, proxy_url: str = "") -> list:
         print(f"Error scraping Himalayas: {e}")
     return jobs_list
 
-def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", hours_old: int = 24) -> list:
+def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", hours_old: int = 24, is_remote: bool = False) -> list:
     """Aggregates jobs across universal platforms, direct ATS dorks, and remote hubs in parallel."""
     all_jobs = []
     seen_urls = set()
     proxy_url = get_scraperapi_proxy(scraperapi_key)
-    is_remote_search = "remote" in location.lower() or "worldwide" in location.lower()
+    is_remote_search = is_remote or "remote" in location.lower() or "worldwide" in location.lower()
     
     tasks = []
     with ThreadPoolExecutor(max_workers=6) as executor:
         # 1. Parallel Task: Direct ATS Google Dorks
-        tasks.append(executor.submit(scrape_direct_ats_dorks, search_term, location, proxy_url, 15, hours_old))
+        dork_term = f"{search_term} remote" if is_remote and "remote" not in search_term.lower() else search_term
+        tasks.append(executor.submit(scrape_direct_ats_dorks, dork_term, location, proxy_url, 15, hours_old))
         
         # 2. Parallel Task: Universal Enterprise Job Boards (JobSpy)
         universal_sites = ["linkedin", "indeed", "google", "glassdoor", "zip_recruiter"]
-        tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, 15, hours_old))
+        tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, 15, hours_old, is_remote_search))
         
         # 3. Parallel Tasks: Direct Remote Job APIs
         if is_remote_search:

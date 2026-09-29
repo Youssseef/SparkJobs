@@ -22,6 +22,25 @@ class TestSparkJobsSuite(unittest.TestCase):
         self.assertFalse(is_title_relevant("Product Designer", targets))
         self.assertFalse(is_title_relevant("DevOps Engineer", targets))
 
+        # Domain Qualifier Standard: Digital design must NOT match mechanical/graphic/industrial
+        designer_targets = ["Product Designer", "UI/UX Designer"]
+        self.assertTrue(is_title_relevant("Senior Product Designer", designer_targets))
+        self.assertTrue(is_title_relevant("Lead UI/UX Designer", designer_targets))
+        self.assertTrue(is_title_relevant("UI Designer", designer_targets))
+        self.assertTrue(is_title_relevant("UX Designer", designer_targets))
+        self.assertFalse(is_title_relevant("Mechanical Designer", designer_targets))
+        self.assertFalse(is_title_relevant("Graphic Designer", designer_targets))
+        self.assertFalse(is_title_relevant("Mechanical Product Designer", designer_targets))
+        self.assertFalse(is_title_relevant("Interior Designer", designer_targets))
+
+        # Domain Qualifier Standard: Product Management must NOT match store/restaurant management
+        pm_targets = ["Product Manager"]
+        self.assertTrue(is_title_relevant("Senior Product Manager", pm_targets))
+        self.assertTrue(is_title_relevant("Associate Product Manager", pm_targets))
+        self.assertFalse(is_title_relevant("Restaurant Manager", pm_targets))
+        self.assertFalse(is_title_relevant("Store Manager", pm_targets))
+        self.assertFalse(is_title_relevant("Property Manager", pm_targets))
+
     def test_word_boundary_negative_blocklist(self):
         # M-03 Fix: "Salesforce Developer" should NOT be blocked by "sales"
         targets = ["Salesforce Developer"]
@@ -31,7 +50,7 @@ class TestSparkJobsSuite(unittest.TestCase):
         self.assertFalse(is_title_relevant("Inside Sales Representative", targets_dev))
 
     def test_role_core_extraction(self):
-        self.assertEqual(get_role_core("Senior Product Designer"), "designer")
+        self.assertEqual(get_role_core("Senior Product Designer"), "product")
         self.assertEqual(get_role_core("Lead Frontend Engineer"), "frontend")
 
     def test_cv_anonymization(self):

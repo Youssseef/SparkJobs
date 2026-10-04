@@ -15,6 +15,7 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
     try:
         files_to_check = [
             "src/main.py",
+            "src/scraper.py",
             ".github/workflows/scan.yml",
             ".github/workflows/analyze_form.yml",
             ".github/workflows/submit_application.yml"

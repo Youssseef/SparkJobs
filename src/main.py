@@ -1,3 +1,4 @@
+# SparkJobs Engine v2.4.1 - Self-Healing Direct Scraper Fallback
 import os
 import sys
 import json

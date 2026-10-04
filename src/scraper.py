@@ -4,6 +4,8 @@ import time
 import random
 import hashlib
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from urllib.parse import quote
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
@@ -171,7 +173,11 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 proxies=jobspy_proxies
             )
         except Exception as primary_err:
-            print(f"JobSpy scrape attempt failed ({primary_err}). Retrying with direct connection...")
+            print(f"JobSpy scrape attempt exception with proxy: {primary_err}")
+
+        # Self-healing fallback: If proxy was used and returned 0 jobs (due to proxy error/SSL block/quota), retry directly
+        if (df is None or df.empty) and jobspy_proxies:
+            print(f"JobSpy returned 0 jobs with proxy. Retrying with direct connection...")
             try:
                 core_sites = [s for s in ["linkedin", "indeed", "google"] if s in valid_sites] or ["linkedin", "indeed", "google"]
                 df = scrape_jobs(
@@ -250,7 +256,11 @@ def scrape_remoteok(search_term: str, proxy_url: str = "") -> list:
         encoded_tag = quote(search_term.replace(' ', '-'))
         url = f"https://remoteok.com/api?tag={encoded_tag}"
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
+        verify_ssl = False if proxy_url else True
+        try:
+            response = requests.get(url, headers=headers, proxies=proxies, verify=verify_ssl, timeout=10)
+        except requests.RequestException:
+            response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             if "json" not in response.headers.get("Content-Type", "").lower():
@@ -288,7 +298,11 @@ def scrape_remotive(search_term: str, proxy_url: str = "") -> list:
         print(f"Scraping Remotive for '{search_term}'...")
         url = "https://remotive.com/api/remote-jobs"
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        response = requests.get(url, params={"search": search_term}, proxies=proxies, timeout=10)
+        verify_ssl = False if proxy_url else True
+        try:
+            response = requests.get(url, params={"search": search_term}, proxies=proxies, verify=verify_ssl, timeout=10)
+        except requests.RequestException:
+            response = requests.get(url, params={"search": search_term}, timeout=10)
         if response.status_code == 200:
             if "json" not in response.headers.get("Content-Type", "").lower():
                 return jobs_list
@@ -343,7 +357,11 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
 
         rss_url = f"https://weworkremotely.com/categories/{category}.rss"
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        response = requests.get(rss_url, proxies=proxies, timeout=10)
+        verify_ssl = False if proxy_url else True
+        try:
+            response = requests.get(rss_url, proxies=proxies, verify=verify_ssl, timeout=10)
+        except requests.RequestException:
+            response = requests.get(rss_url, timeout=10)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, "xml")
@@ -406,19 +424,21 @@ def _scrape_single_ats_dork(platform_name: str, dork: str, search_term: str, loc
                 hours_old=hours_old,
                 proxies=jobspy_proxies
             )
-        except Exception as dork_err:
-            if jobspy_proxies:
-                try:
-                    df = scrape_jobs(
-                        site_name=["google"],
-                        search_term=dork_query,
-                        location=location,
-                        results_wanted=results_wanted,
-                        hours_old=hours_old,
-                        proxies=None
-                    )
-                except Exception:
-                    pass
+        except Exception:
+            pass
+
+        if (df is None or df.empty) and jobspy_proxies:
+            try:
+                df = scrape_jobs(
+                    site_name=["google"],
+                    search_term=dork_query,
+                    location=location,
+                    results_wanted=results_wanted,
+                    hours_old=hours_old,
+                    proxies=None
+                )
+            except Exception:
+                pass
         if df is not None and not df.empty:
             for _, row in df.iterrows():
                 raw_url = safe_str(row.get("job_url_direct", "")) or safe_str(row.get("job_url", ""))
@@ -480,7 +500,11 @@ def scrape_himalayas(search_term: str, proxy_url: str = "") -> list:
         encoded_q = quote(search_term)
         url = f"https://himalayas.app/jobs/api?search={encoded_q}&limit=20"
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
+        verify_ssl = False if proxy_url else True
+        try:
+            response = requests.get(url, headers=headers, proxies=proxies, verify=verify_ssl, timeout=10)
+        except requests.RequestException:
+            response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
             for item in data.get("jobs", []):
@@ -522,12 +546,12 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", h
         universal_sites = ["linkedin", "indeed", "google", "glassdoor", "zip_recruiter"]
         tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, 15, hours_old, is_remote_search))
         
-        # 3. Parallel Tasks: Direct Remote Job APIs
+        # 3. Parallel Tasks: Direct Remote Job APIs (direct native HTTPS, saving proxy credits)
         if is_remote_search:
-            tasks.append(executor.submit(scrape_himalayas, search_term, proxy_url))
-            tasks.append(executor.submit(scrape_remoteok, search_term, proxy_url))
-            tasks.append(executor.submit(scrape_remotive, search_term, proxy_url))
-            tasks.append(executor.submit(scrape_weworkremotely, search_term, proxy_url))
+            tasks.append(executor.submit(scrape_himalayas, search_term))
+            tasks.append(executor.submit(scrape_remoteok, search_term))
+            tasks.append(executor.submit(scrape_remotive, search_term))
+            tasks.append(executor.submit(scrape_weworkremotely, search_term))
             
         for future in as_completed(tasks):
             try:

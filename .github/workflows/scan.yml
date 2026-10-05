@@ -6,6 +6,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10 # Hard safety net: prevents runner hangs or slow scraping from draining billing quota
     concurrency:
       group: sparkjobs-scan-${{ github.ref }}
       cancel-in-progress: true

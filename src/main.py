@@ -1,4 +1,4 @@
-# SparkJobs Engine v2.4.1 - Self-Healing Direct Scraper Fallback
+# SparkJobs Engine v2.4.2 - Ubuntu 24.04 LTS CI Runner Allocation & Universal Update Alerts
 import os
 import sys
 import json

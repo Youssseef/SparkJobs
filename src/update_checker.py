@@ -29,9 +29,16 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
         if github_token:
             headers['Authorization'] = f'token {github_token}'
 
-        update_available = False
-        latest_sha = ""
-        
+        # Retrieve latest master commit SHA as the authoritative release version
+        commit_url = f"https://api.github.com/repos/{template_owner}/{template_repo}/commits/master"
+        try:
+            commit_res = requests.get(commit_url, headers=headers, timeout=5)
+            if commit_res.status_code == 200:
+                latest_sha = commit_res.json().get("sha", "")
+        except Exception:
+            pass
+
+        file_shas = {}
         for path in files_to_check:
             local_file_path = os.path.join(BASE_DIR, path.replace("/", os.sep))
             local_sha = ""
@@ -50,7 +57,9 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
             if response.status_code == 200:
                 meta = response.json()
                 template_sha = meta.get("sha", "")
-                if path == "src/main.py":
+                if template_sha:
+                    file_shas[path] = template_sha
+                if not latest_sha and path == "src/main.py":
                     latest_sha = template_sha
                 if template_sha and local_sha != template_sha:
                     content_b64 = meta.get("content", "")
@@ -70,6 +79,11 @@ def check_for_updates(bot_token: str, chat_id: str, tracker: dict, language: str
                     else:
                         update_available = True
                         break
+
+        # Fallback composite hash if commit endpoint unavailable
+        if not latest_sha and file_shas:
+            composite_data = "".join(f"{k}:{v}" for k, v in sorted(file_shas.items())).encode("utf-8")
+            latest_sha = hashlib.sha1(composite_data).hexdigest()
 
         if update_available and latest_sha:
             if tracker.get("last_update_alert_sha") != latest_sha:

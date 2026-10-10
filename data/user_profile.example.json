@@ -1,0 +1,18 @@
+{
+  "full_name": "Your Name",
+  "email": "your-email@example.com",
+  "phone": "+1234567890",
+  "linkedin_url": "https://www.linkedin.com/in/your-profile",
+  "portfolio_url": "https://yourportfolio.com",
+  "github_url": "https://github.com/your-username",
+  "location_city": "City",
+  "location_country": "Country",
+  "current_title": "Product Designer",
+  "current_company": "",
+  "experience_years": "3",
+  "notice_period": "immediate",
+  "sponsorship_required": "no",
+  "cv_filename": "default_cv.pdf",
+  "skills": [],
+  "linkedin_cookie": ""
+}

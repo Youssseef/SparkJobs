@@ -60,9 +60,9 @@ def get_safe_job_url(raw_url: str, language: str = "ar") -> tuple[str, str]:
     
     note_badge = ""
     if "linkedin.com/jobs" in u_lower or "glassdoor.com" in u_lower:
-        note_badge = "\n⚠️ <i>🔐 (قد يتطلب تسجيل دخول | Login may be required)</i>" if language == "ar" else "\n⚠️ <i>🔐 (Login may be required)</i>"
+        note_badge = "\n<i>[ملاحظة: قد يتطلب تسجيل الدخول عند الفتح عبر التطبيق]</i>" if language == "ar" else "\n<i>[Note: Login may be required if opened inside in-app webview]</i>"
     elif clean_url.startswith('http://'):
-        note_badge = "\n⚠️ <i>🔓 (رابط HTTP غير مشفر | Insecure HTTP link)</i>" if language == "ar" else "\n⚠️ <i>🔓 (Insecure HTTP link)</i>"
+        note_badge = "\n<i>[تنبيه: رابط HTTP غير مشفر]</i>" if language == "ar" else "\n<i>[Alert: Insecure HTTP connection]</i>"
 
     return safe_url, note_badge
 
@@ -75,18 +75,18 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     risk_level = ai_analysis.get("risk_level", "Low")
     if language == "ar":
         if risk_level == "High":
-            safety_badge = "🔴 <b>مخاطر عالية (وظيفة وهمية/احتيال)</b>"
+            safety_badge = "<b>[مخاطر عالية: وظيفة مشبوهة]</b>"
         elif risk_level == "Medium":
-            safety_badge = "🟡 <b>مخاطر متوسطة</b>"
+            safety_badge = "<b>[مخاطر متوسطة]</b>"
         else:
-            safety_badge = "🟢 <b>مخاطر منخفضة</b>"
+            safety_badge = "<b>[مخاطر منخفضة]</b>"
     else:
         if risk_level == "High":
-            safety_badge = "🔴 <b>HIGH RISK (SCAM/GHOST)</b>"
+            safety_badge = "<b>[HIGH RISK: SUSPICIOUS]</b>"
         elif risk_level == "Medium":
-            safety_badge = "🟡 <b>MEDIUM RISK</b>"
+            safety_badge = "<b>[MEDIUM RISK]</b>"
         else:
-            safety_badge = "🟢 <b>LOW RISK</b>"
+            safety_badge = "<b>[LOW RISK]</b>"
 
     risk_reason = ai_analysis.get("risk_reason", "")
     if risk_reason:
@@ -105,13 +105,13 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     outreach = ai_analysis.get("outreach_message") or ""
     
     if language == "ar":
-        pros_section = f"\n<b>✅ نقاط القوة:</b>\n{pros}" if pros else ""
-        cons_section = f"\n<b>⚠️ فجوات:</b>\n{cons}" if cons else ""
-        missing_section = f"\n<b>🔍 كلمات مفتاحية ناقصة:</b> {missing}" if missing else ""
+        pros_section = f"\n<b>نقاط القوة:</b>\n{pros}" if pros else ""
+        cons_section = f"\n<b>فجوات التوافق:</b>\n{cons}" if cons else ""
+        missing_section = f"\n<b>كلمات مفتاحية مطلوبة:</b> {missing}" if missing else ""
     else:
-        pros_section = f"\n<b>✅ Strengths:</b>\n{pros}" if pros else ""
-        cons_section = f"\n<b>⚠️ Gaps:</b>\n{cons}" if cons else ""
-        missing_section = f"\n<b>🔍 Missing Keywords:</b> {missing}" if missing else ""
+        pros_section = f"\n<b>Strengths:</b>\n{pros}" if pros else ""
+        cons_section = f"\n<b>Gaps:</b>\n{cons}" if cons else ""
+        missing_section = f"\n<b>Missing Keywords:</b> {missing}" if missing else ""
 
     safe_url, url_note = get_safe_job_url(job.get('url', ''), language)
     search_url = escape_html(build_search_fallback_url(job.get('company', ''), job.get('title', '')))
@@ -134,8 +134,8 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-🚀 <b>رابط التقديم المباشر:</b> <a href="{safe_url}">قدّم الآن (Direct Apply)</a>{url_note}
-🔍 <b>بحث بديل بالمتصفح:</b> <a href="{search_url}">فتح في المتصفح / LinkedIn</a>{SPARKGEN_FOOTER}
+رابط الإعلان المباشر: <a href="{safe_url}">فتح الوظيفة</a>{url_note}
+تخطي تسجيل الدخول (موقع الشركة): <a href="{search_url}">فتح في المتصفح</a>{SPARKGEN_FOOTER}
 """
     else:
         message = f"""<b>New Job Match | {escape_html(profile_name)}</b>
@@ -155,8 +155,8 @@ Recruiter Outreach Message:
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-🚀 <b>Application Link:</b> <a href="{safe_url}">Apply Now (Direct ATS)</a>{url_note}
-🔍 <b>Browser Search Backup:</b> <a href="{search_url}">Open in Safari/Chrome / LinkedIn</a>{SPARKGEN_FOOTER}
+Direct Posting Link: <a href="{safe_url}">View Job</a>{url_note}
+Bypass Login (Company Portal): <a href="{search_url}">Open in Browser</a>{SPARKGEN_FOOTER}
 """
 
     MAX_TG_LENGTH = 4096
@@ -168,8 +168,9 @@ Recruiter Outreach Message:
             encoded_msg = message.encode('utf-8')
             message = encoded_msg[:4000].decode('utf-8', errors='ignore') + "\n...\n" + SPARKGEN_FOOTER
 
-    btn_applied = "تم التقديم ✅" if language == "ar" else "Applied ✅"
-    btn_ignore = "تجاهل ❌" if language == "ar" else "Ignore ❌"
+    btn_applied = "تم التقديم" if language == "ar" else "Applied"
+    btn_ignore = "تجاهل" if language == "ar" else "Ignore"
+
     
     job_id = str(job.get('id', ''))
     cb_applied = safe_callback_id(job_id, "applied")

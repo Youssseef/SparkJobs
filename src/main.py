@@ -210,6 +210,7 @@ def run_scanner():
             send_telegram_message(bot_token, chat_id, cv_warning_msg + SPARKGEN_FOOTER)
             tracker[tracker_key] = True
 
+    dorks_executed = set()
     for tc in active_countries:
         country_name = tc.get("country", "Worldwide")
         remote_only = tc.get("remote_only", False)
@@ -226,9 +227,18 @@ def run_scanner():
                 location = country_name
                 is_remote_flag = remote_only
 
-            print(f"Scanning for '{title}' in '{location}' (Remote Only: {is_remote_flag})...")
+            should_run_dorks = title not in dorks_executed
+            if should_run_dorks:
+                dorks_executed.add(title)
+
+            print(f"Scanning for '{title}' in '{location}' (Remote: {is_remote_flag}, ATS Dorks: {should_run_dorks})...")
             
-            jobs = run_all_scrapes(title, location, scraperapi_key, hours_old=24, is_remote=is_remote_flag)
+            jobs = run_all_scrapes(
+                title, location, scraperapi_key,
+                hours_old=24, is_remote=is_remote_flag,
+                seen_jobs=seen_jobs, include_ats_dorks=should_run_dorks
+            )
+
             
             # Step 1: Pre-filter candidate jobs that are un-seen and match keyword rules
             candidate_jobs = []

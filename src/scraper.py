@@ -13,6 +13,8 @@ from jobspy import scrape_jobs
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from url_resolver import resolve_canonical_url, is_ats_url
+from deduplicator import is_job_seen
+
 
 INDEED_DOMAINS = {
     "saudi arabia": "sa.indeed.com",
@@ -132,7 +134,7 @@ COUNTRY_ALIASES = {
     "united states": "usa"
 }
 
-def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24, is_remote: bool = False) -> list:
+def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24, is_remote: bool = False, seen_jobs: dict = None) -> list:
     """
     Scrapes jobs across universal platforms using python-jobspy
     (LinkedIn, Indeed, Google Jobs, Glassdoor, ZipRecruiter).
@@ -225,11 +227,18 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                 if not is_url_reliable(raw_url, site):
                     continue
 
+                # Fast in-memory deduplication check: skip network resolution for previously seen postings
+                row_title = safe_str(row.get("title", ""))
+                row_comp = safe_str(row.get("company", ""))
+                if seen_jobs and is_job_seen(seen_jobs, job_id, title=row_title, company=row_comp, url=raw_url):
+                    continue
+
                 # Pre-flight canonical URL resolution with actual job location
                 canonical_url, is_live, reason = resolve_canonical_url(raw_url, location=job_loc)
                 if not is_live:
                     print(f"Discarding dead or closed job ({reason}): {raw_url}")
                     continue
+
 
                 jobs_list.append({
                     "id": job_id or f"{site}-{hashlib.md5(canonical_url.encode()).hexdigest()[:10]}",
@@ -407,7 +416,7 @@ def scrape_weworkremotely(search_term: str, proxy_url: str = "") -> list:
         print(f"Error scraping We Work Remotely: {e}")
     return jobs_list
 
-def _scrape_single_ats_dork(platform_name: str, dork: str, search_term: str, location: str, proxy_url: str, results_wanted: int, hours_old: int) -> list:
+def _scrape_single_ats_dork(platform_name: str, dork: str, search_term: str, location: str, proxy_url: str, results_wanted: int, hours_old: int, seen_jobs: dict = None) -> list:
     """Scrapes a single ATS dork domain concurrently."""
     jobs = []
     try:
@@ -444,14 +453,19 @@ def _scrape_single_ats_dork(platform_name: str, dork: str, search_term: str, loc
                 raw_url = safe_str(row.get("job_url_direct", "")) or safe_str(row.get("job_url", ""))
                 if not raw_url or not is_url_reliable(raw_url, platform_name):
                     continue
+                d_title = safe_str(row.get("title", ""))
+                d_comp = safe_str(row.get("company", ""))
+                d_id = safe_str(row.get("id", ""))
+                if seen_jobs and is_job_seen(seen_jobs, d_id, title=d_title, company=d_comp, url=raw_url):
+                    continue
                 canonical_url, is_live, reason = resolve_canonical_url(raw_url, location=location)
                 if not is_live:
                     continue
-                job_id = safe_str(row.get("id", "")) or f"{platform_name}-{hashlib.md5(canonical_url.encode()).hexdigest()[:10]}"
+                job_id = d_id or f"{platform_name}-{hashlib.md5(canonical_url.encode()).hexdigest()[:10]}"
                 jobs.append({
                     "id": job_id,
-                    "title": safe_str(row.get("title", "")),
-                    "company": safe_str(row.get("company", "")),
+                    "title": d_title,
+                    "company": d_comp,
                     "location": safe_str(row.get("location", "")) or location,
                     "url": canonical_url,
                     "description": strip_html(safe_str(row.get("description", ""))),
@@ -463,7 +477,7 @@ def _scrape_single_ats_dork(platform_name: str, dork: str, search_term: str, loc
         print(f"Error scraping ATS dork for {platform_name}: {e}")
     return jobs
 
-def scrape_direct_ats_dorks(search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24) -> list:
+def scrape_direct_ats_dorks(search_term: str, location: str, proxy_url: str = "", results_wanted: int = 15, hours_old: int = 24, seen_jobs: dict = None) -> list:
     """
     Directly targets open ATS domains (Lever, Greenhouse, Ashby, Workable) via Google Jobs concurrently.
     """
@@ -477,9 +491,10 @@ def scrape_direct_ats_dorks(search_term: str, location: str, proxy_url: str = ""
     
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = [
-            executor.submit(_scrape_single_ats_dork, platform_name, dork, search_term, location, proxy_url, results_wanted, hours_old)
+            executor.submit(_scrape_single_ats_dork, platform_name, dork, search_term, location, proxy_url, results_wanted, hours_old, seen_jobs)
             for platform_name, dork in ats_domains
         ]
+
         for f in as_completed(futures):
             try:
                 res = f.result()
@@ -529,7 +544,7 @@ def scrape_himalayas(search_term: str, proxy_url: str = "") -> list:
         print(f"Error scraping Himalayas: {e}")
     return jobs_list
 
-def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", hours_old: int = 24, is_remote: bool = False) -> list:
+def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", hours_old: int = 24, is_remote: bool = False, seen_jobs: dict = None, include_ats_dorks: bool = True) -> list:
     """Aggregates jobs across universal platforms, direct ATS dorks, and remote hubs in parallel."""
     all_jobs = []
     seen_urls = set()
@@ -538,13 +553,14 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", h
     
     tasks = []
     with ThreadPoolExecutor(max_workers=6) as executor:
-        # 1. Parallel Task: Direct ATS Google Dorks
-        dork_term = f"{search_term} remote" if is_remote and "remote" not in search_term.lower() else search_term
-        tasks.append(executor.submit(scrape_direct_ats_dorks, dork_term, location, proxy_url, 15, hours_old))
+        # 1. Parallel Task: Direct ATS Google Dorks (decoupled to avoid redundant country loops)
+        if include_ats_dorks:
+            dork_term = f"{search_term} remote" if is_remote and "remote" not in search_term.lower() else search_term
+            tasks.append(executor.submit(scrape_direct_ats_dorks, dork_term, location, proxy_url, 15, hours_old, seen_jobs))
         
-        # 2. Parallel Task: Universal Enterprise Job Boards (JobSpy)
+        # 2. Parallel Task: Universal Enterprise Job Boards (JobSpy) with pre-deduplication
         universal_sites = ["linkedin", "indeed", "google", "glassdoor", "zip_recruiter"]
-        tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, 15, hours_old, is_remote_search))
+        tasks.append(executor.submit(scrape_jobspy, universal_sites, search_term, location, proxy_url, 15, hours_old, is_remote_search, seen_jobs))
         
         # 3. Parallel Tasks: Direct Remote Job APIs (direct native HTTPS, saving proxy credits)
         if is_remote_search:
@@ -565,6 +581,7 @@ def run_all_scrapes(search_term: str, location: str, scraperapi_key: str = "", h
                 print(f"Scraper subtask error: {e}")
         
     return all_jobs
+
 
 if __name__ == "__main__":
     jobs = run_all_scrapes("Product Designer", "Remote", hours_old=24)

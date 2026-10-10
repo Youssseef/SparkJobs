@@ -18,9 +18,17 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# User CV uploads (keep default_cv.txt template)
+# ─── SECURITY & PRIVACY: Candidate Data & Logs (Never Commit to Public Repos) ─
+data/user_profile.json
+data/cover_letter.txt
 data/cvs/*.pdf
 data/cvs/*.docx
+data/screenshots/
+data/application_log.json
+data/pending_batch.json
+data/form_analysis.json
+data/.config_corrupted
 
 # ─── SECURITY: Never commit test files with credentials ───────────────────────
 test_live_alert.py
+bot/test_live_alert.py

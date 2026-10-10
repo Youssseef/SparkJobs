@@ -28,6 +28,8 @@ from config_loader import (
 from title_matcher import is_title_relevant
 from update_checker import check_for_updates
 from history_writer import append_to_history
+from ats_resolver import resolve_direct_ats_link
+from url_resolver import detect_ats_platform
 
 
 def evaluate_single_job(job, cv_text, gemini_key, min_score, cover_letter, years_exp, requires_visa=False, target_country=""):
@@ -331,6 +333,28 @@ def run_scanner():
                             all_missing_keywords.extend(ai_result.get("missing_keywords") or [])
                             
                             if match_score >= min_score:
+                                # LinkedIn Login-Free Standard: Resolve direct ATS or discard to eliminate login modals
+                                job_url_val = job.get("url", "")
+                                is_linkedin = "linkedin.com" in job_url_val.lower()
+                                is_easy = job.get("is_easy_apply", False)
+
+                                if is_linkedin and not is_easy:
+                                    direct_ats = resolve_direct_ats_link(
+                                        company=job.get("company", ""),
+                                        title=job.get("title", ""),
+                                        location=job.get("location", ""),
+                                        scraperapi_key=scraperapi_key
+                                    )
+                                    if direct_ats:
+                                        print(f"[ATS Resolver] Resolved direct ATS link for '{job['title']}' at '{job.get('company')}': {direct_ats}")
+                                        job["url"] = direct_ats
+                                        job["source"] = f"LinkedIn -> {detect_ats_platform(direct_ats).title()}"
+                                        job["ats_platform"] = detect_ats_platform(direct_ats)
+                                    else:
+                                        print(f"[ATS Resolver] Discarded LinkedIn external job (no direct ATS mirror found): '{job['title']}' at '{job.get('company')}'")
+                                        mark_job_as_seen(seen_jobs, job_id, job["title"], job.get("company", ""), url=job_url_val)
+                                        continue
+
                                 alert_label = f"{title} ({country_name})"
                                 success = send_telegram_alert(
                                     bot_token=bot_token,

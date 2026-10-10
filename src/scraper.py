@@ -240,6 +240,7 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                     continue
 
 
+                is_easy = bool(row.get("is_easy_apply", False))
                 jobs_list.append({
                     "id": job_id or f"{site}-{hashlib.md5(canonical_url.encode()).hexdigest()[:10]}",
                     "title": safe_str(row.get("title", "")),
@@ -248,6 +249,8 @@ def scrape_jobspy(site_name: list, search_term: str, location: str, proxy_url: s
                     "url": canonical_url,
                     "description": strip_html(desc),
                     "source": safe_str(row.get("site", "JobSpy")).title(),
+                    "is_easy_apply": is_easy,
+                    "url_direct": url_direct if url_direct.strip().startswith("http") else "",
                     "date": datetime.utcnow().isoformat() + "Z"
                 })
 
@@ -486,10 +489,12 @@ def scrape_direct_ats_dorks(search_term: str, location: str, proxy_url: str = ""
         ("lever", "site:jobs.lever.co"),
         ("greenhouse", "site:boards.greenhouse.io"),
         ("ashby", "site:jobs.ashbyhq.com"),
-        ("workable", "site:apply.workable.com")
+        ("workable", "site:apply.workable.com"),
+        ("smartrecruiters", "site:jobs.smartrecruiters.com"),
+        ("bamboohr", "site:bamboohr.com")
     ]
     
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         futures = [
             executor.submit(_scrape_single_ats_dork, platform_name, dork, search_term, location, proxy_url, results_wanted, hours_old, seen_jobs)
             for platform_name, dork in ats_domains

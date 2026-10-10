@@ -59,9 +59,7 @@ def get_safe_job_url(raw_url: str, language: str = "ar") -> tuple[str, str]:
     u_lower = clean_url.lower()
     
     note_badge = ""
-    if "linkedin.com/jobs" in u_lower or "glassdoor.com" in u_lower:
-        note_badge = "\n<i>[ملاحظة: قد يتطلب تسجيل الدخول عند الفتح عبر التطبيق]</i>" if language == "ar" else "\n<i>[Note: Login may be required if opened inside in-app webview]</i>"
-    elif clean_url.startswith('http://'):
+    if clean_url.startswith('http://'):
         note_badge = "\n<i>[تنبيه: رابط HTTP غير مشفر]</i>" if language == "ar" else "\n<i>[Alert: Insecure HTTP connection]</i>"
 
     return safe_url, note_badge
@@ -116,7 +114,10 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
     safe_url, url_note = get_safe_job_url(job.get('url', ''), language)
     search_url = escape_html(build_search_fallback_url(job.get('company', ''), job.get('title', '')))
 
+    is_easy = bool(job.get('is_easy_apply', False))
     if language == "ar":
+        link_title = "رابط التقديم السريع" if is_easy else "رابط التقديم المباشر"
+        btn_label = "قدّم عبر LinkedIn (Easy Apply)" if is_easy else "قدّم الآن (رابط مباشر - بدون تسجيل دخول)"
         message = f"""<b>وظيفة جديدة | {escape_html(profile_name)}</b>
  
 <b>{escape_html(job.get('title', ''))}</b>
@@ -134,10 +135,11 @@ def send_telegram_alert(bot_token: str, chat_id: str, job: dict, ai_analysis: di
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-رابط الإعلان المباشر: <a href="{safe_url}">فتح الوظيفة</a>{url_note}
-تخطي تسجيل الدخول (موقع الشركة): <a href="{search_url}">فتح في المتصفح</a>{SPARKGEN_FOOTER}
+{link_title}: <a href="{safe_url}">{btn_label}</a>{url_note}{SPARKGEN_FOOTER}
 """
     else:
+        link_title = "Quick Apply Link" if is_easy else "Direct Application Link"
+        btn_label = "Apply on LinkedIn (Easy Apply)" if is_easy else "Apply Now (Direct Portal - No Login)"
         message = f"""<b>New Job Match | {escape_html(profile_name)}</b>
  
 <b>{escape_html(job.get('title', ''))}</b>
@@ -155,8 +157,7 @@ Recruiter Outreach Message:
 <code>{escape_html(outreach)}</code>
  
 ──────────────────
-Direct Posting Link: <a href="{safe_url}">View Job</a>{url_note}
-Bypass Login (Company Portal): <a href="{search_url}">Open in Browser</a>{SPARKGEN_FOOTER}
+{link_title}: <a href="{safe_url}">{btn_label}</a>{url_note}{SPARKGEN_FOOTER}
 """
 
     MAX_TG_LENGTH = 4096

@@ -23,6 +23,7 @@ data/user_profile.json
 data/cover_letter.txt
 data/cvs/*.pdf
 data/cvs/*.docx
+!data/cvs/default_cv.*
 data/screenshots/
 data/application_log.json
 data/pending_batch.json

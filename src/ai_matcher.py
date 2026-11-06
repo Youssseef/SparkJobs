@@ -1,18 +1,25 @@
 import os
 import json
 import re
-from google import genai
-from google.genai import types
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    genai = None
+    types = None
+
 from cv_processor import anonymize_cv_text
 
 MODEL_CASCADE = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
     "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-3.8-flash",
 ]
 
 def get_gemini_client(api_key: str):
-    if not api_key:
+    if not api_key or not genai:
         return None
     return genai.Client(api_key=api_key)
 
@@ -23,7 +30,6 @@ def clean_json_response(text: str) -> dict:
     if not text:
         return {}
     try:
-        # Strip markdown fences first
         cleaned = re.sub(r'```(?:json)?\s*', '', text).strip()
         cleaned = cleaned.rstrip('`').strip()
         
@@ -45,9 +51,7 @@ def sanitize_for_prompt(text: str, max_len: int = 8000) -> str:
     """
     if not text:
         return ""
-    # Strip markdown section fences that could hijack prompt structure
     cleaned = str(text).replace("---", "___")
-    # Neutralize common LLM injection control patterns
     cleaned = re.sub(r'(?i)\b(ignore all previous instructions|system instruction:|system:|\[inst\]|<\|im_start\|>)', '[REDACTED_INJECTION_ATTEMPT]', cleaned)
     return cleaned[:max_len]
 
@@ -56,7 +60,7 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
     safe_title = sanitize_for_prompt(job_title, max_len=200)
     safe_desc = sanitize_for_prompt(job_desc, max_len=8000)
 
-    fallback = {
+    missing_key_fallback = {
         "match_score": 100,
         "estimated_salary": "Not specified (Market average: Unknown)",
         "risk_level": "Low",
@@ -69,11 +73,20 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
 
     if not api_key:
         print("No Gemini API key provided. Bypassing AI match filters to deliver all parsed jobs.")
-        return fallback
+        return missing_key_fallback
 
     client = get_gemini_client(api_key)
     if not client:
-        return fallback
+        return {
+            "match_score": 100,
+            "estimated_salary": "Market average: Unknown",
+            "risk_level": "Low",
+            "risk_reason": "AI client initialization unavailable",
+            "pros": ["Job alert delivered (AI client uninitialized)"],
+            "cons": ["Google GenAI client could not be loaded. Please ensure dependencies are installed."],
+            "missing_keywords": [],
+            "outreach_message": "Reach out directly via the job posting link."
+        }
 
     cover_letter_context = ""
     if cover_letter:
@@ -208,8 +221,17 @@ def analyze_job_match(cv_text: str, job_title: str, job_desc: str, api_key: str,
             print(f"Model {model_name} failed: {sanitized_err}. Trying next...")
             continue
 
-    print("All models in cascade failed. Returning fallback.")
-    return fallback
+    print("All models in cascade failed. Returning provider busy fallback.")
+    return {
+        "match_score": 100,
+        "estimated_salary": "Market average: Unknown",
+        "risk_level": "Low",
+        "risk_reason": "AI evaluation temporarily unavailable (Rate Limit or Model Busy)",
+        "pros": ["Job alert delivered without disruption"],
+        "cons": ["Google Gemini service is temporarily busy or rate-limited. Smart scoring will resume on next scan."],
+        "missing_keywords": [],
+        "outreach_message": "Reach out directly via the job link below."
+    }
 
 if __name__ == "__main__":
     api_key = os.environ.get("GEMINI_API_KEY", "")
